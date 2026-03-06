@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Todo Garden</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library/2.38.0/msal-browser.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 
@@ -66,6 +67,8 @@ select option { background:#fff; }
 .btn:hover { border-color:var(--border2); color:var(--text); }
 .btn.primary { background:var(--text); border-color:var(--text); color:#fff; }
 .btn.primary:hover { background:#333; }
+.btn.ms { background:#0078d4; border-color:#0078d4; color:#fff; }
+.btn.ms:hover { background:#006cb8; }
 .btn.cancel-btn { border-color:#e8a0a0; color:#c06050; background:#fff8f7; }
 .btn.cancel-btn:hover { background:#fff0ee; }
 .btn:disabled { opacity:0.35; pointer-events:none; }
@@ -109,32 +112,18 @@ select option { background:#fff; }
 .tray-scroll > * { transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1); }
 .tray-foot { padding:0.4rem 0.7rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;flex-shrink:0;background:#f5f5f0; }
 
-/* garden header in tray */
+/* sprint header in tray — hierarchy style */
+/* ── tray header: project/sprint hierarchy ── */
 .tray-hdr { border-bottom:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;background:#f7f7f4; }
-.tray-hdr-section { padding:0.65rem 0.85rem 0.55rem;position:relative; }
-/* icon buttons */
-.tsh-btn { background:none;border:none;cursor:pointer;font-size:0.65rem;padding:0.05rem 0.2rem;color:var(--faint);transition:color 0.12s;line-height:1.4; }
-.tsh-btn:hover { color:var(--text); }
-.tsh-btn.tsh-del:hover { color:#c06050; }
-/* garden title row */
-.garden-title-row { display:flex;align-items:center;gap:0.4rem;cursor:pointer;padding:0.15rem 0;border-radius:6px;transition:background 0.12s; }
-.garden-title-row:hover { background:rgba(0,0,0,0.03); }
-.garden-title { font-size:0.95rem;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'DM Mono',monospace; }
-.garden-title-chevron { color:var(--faint);font-size:0.5rem;flex-shrink:0;transition:transform 0.2s; }
-.garden-title-chevron.open { transform:rotate(180deg); }
-.garden-title-actions { display:flex;gap:0.1rem;margin-left:auto;flex-shrink:0; }
-/* inline rename */
-.garden-rename-row { display:flex;align-items:center;gap:0.3rem;padding:0.1rem 0; }
-.garden-rename-input { flex:1;min-width:0;font-size:0.9rem;font-weight:600;color:var(--text);background:var(--bg2);border:1.5px solid var(--accent);border-radius:6px;padding:0.28rem 0.5rem;font-family:'DM Mono',monospace;outline:none; }
-/* garden dropdown */
-.garden-dropdown { border:1px solid var(--border);border-radius:8px;background:var(--card);margin-top:0.4rem;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08); }
-.garden-dropdown-list { max-height:180px;overflow-y:auto; }
-.garden-dropdown-item { padding:0.5rem 0.75rem;font-size:0.72rem;font-family:'DM Mono',monospace;cursor:pointer;color:var(--text);transition:background 0.1s;display:flex;align-items:center;gap:0.4rem; }
-.garden-dropdown-item:hover { background:var(--accent-bg); }
-.garden-dropdown-item.active { background:var(--accent-bg);font-weight:600; }
-.garden-dropdown-item.active::before { content:'●';font-size:0.4rem;color:var(--accent); }
-.garden-dropdown-new { width:100%;padding:0.5rem 0.75rem;font-size:0.68rem;font-family:'DM Mono',monospace;cursor:pointer;color:var(--accent);background:none;border:none;border-top:1px solid var(--border);text-align:left;transition:background 0.1s;font-weight:500; }
-.garden-dropdown-new:hover { background:var(--accent-bg); }
+.tray-hdr-section { padding:0.55rem 0.85rem 0.5rem; }
+.tray-hdr-section + .tray-hdr-section { border-top:1px solid var(--border); padding-top:0.45rem; }
+.tray-hdr-label { font-size:0.44rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);margin-bottom:0.22rem;display:flex;align-items:center;justify-content:space-between; }
+.tray-hdr-label-actions { display:flex;gap:0.2rem; }
+.tray-hdr-select-row { display:flex;align-items:center;gap:0.3rem; }
+.tray-hdr-select { flex:1;min-width:0;font-size:0.7rem;font-weight:500;color:var(--text);background:transparent;border:none;outline:none;font-family:'DM Mono',monospace;cursor:pointer;padding:0;appearance:none;-webkit-appearance:none; }
+.tray-hdr-select option { font-weight:400; }
+.tray-hdr-chevron { color:var(--faint);font-size:0.55rem;pointer-events:none;flex-shrink:0; }
+.tray-hdr-empty { padding:0.9rem 0.85rem;font-size:0.62rem;color:var(--faint);line-height:1.7; }
 /* inline create inputs */
 .tray-hdr-create { display:flex;gap:0.3rem;margin-top:0.35rem;align-items:center; }
 .tray-hdr-create input { flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:0.3rem 0.5rem;font-family:'DM Mono',monospace;font-size:0.65rem;outline:none; }
@@ -142,13 +131,19 @@ select option { background:#fff; }
 .tray-hdr-create button { padding:0.28rem 0.55rem;font-size:0.65rem;border-radius:5px;border:1px solid var(--border);background:var(--card);cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap; }
 .tray-hdr-create button.ok { border-color:var(--accent);color:var(--accent); }
 .tray-hdr-create button.ok:hover { background:var(--accent-bg); }
-/* progress bar */
-.garden-progress { padding:0.35rem 0;margin-top:0.35rem; }
-.garden-progress-info { display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.25rem; }
-.garden-progress-pct { font-size:0.65rem;font-weight:600;color:var(--text);font-family:'DM Mono',monospace; }
-.garden-progress-stats { font-size:0.48rem;color:var(--faint);letter-spacing:0.02em; }
-.garden-progress-track { height:5px;background:var(--border);border-radius:999px;overflow:hidden; }
-.garden-progress-fill { height:100%;background:var(--accent);border-radius:999px;transition:width 0.6s cubic-bezier(0.34,1.2,0.64,1),background 0.3s; }
+/* icon buttons */
+.tsh-btn { background:none;border:none;cursor:pointer;font-size:0.65rem;padding:0.05rem 0.2rem;color:var(--faint);transition:color 0.12s;line-height:1.4; }
+.tsh-btn:hover { color:var(--text); }
+.tsh-btn.tsh-del:hover { color:#c06050; }
+
+/* progress ring */
+.tray-progress-row { display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.85rem 0.6rem;margin-top:0.1rem; }
+.tray-ring { width:32px;height:32px;flex-shrink:0; }
+.tray-progress-text { display:flex;flex-direction:column;align-items:center;line-height:1.2;min-width:28px; }
+.tray-progress-chips { display:flex;flex-direction:column;gap:0.18rem;margin-left:0.1rem; }
+.tray-prog-chip { font-size:0.48rem;letter-spacing:0.04em;padding:0.1rem 0.35rem;border-radius:999px;white-space:nowrap; }
+.tray-prog-chip.todo-chip { background:#e8f0e5;color:#5a7a54; }
+.tray-prog-chip.done-chip { background:#d4f0c8;color:#3a7a28; }
 
 /* due date row */
 .todo-due-row { display:flex;align-items:center;gap:0.3rem; }
@@ -166,15 +161,16 @@ select option { background:#fff; }
 .tray-add-btn:active { transform:translateY(0); }
 
 /* todo task card */
-.todo-task { border-radius:8px;padding:0.6rem 0.7rem;border:1.5px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:0;transition:border-color 0.15s,background 0.15s,opacity 0.2s,box-shadow 0.15s;position:relative;cursor:grab;user-select:none; }
+.todo-task { border-radius:8px;padding:0.6rem 0.7rem;border:1.5px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:0;transition:border-color 0.15s,background 0.15s,opacity 0.2s,box-shadow 0.15s,transform 0.22s cubic-bezier(0.34,1.56,0.64,1);position:relative;cursor:grab;user-select:none; }
 .todo-task-row { display:flex;align-items:center;gap:0.5rem;width:100%; }
 .todo-task:hover { border-color:var(--border2,#c8d8c4);background:#fafefa;box-shadow:0 2px 8px rgba(0,0,0,0.06); }
 .todo-task.selected { border-color:var(--accent);background:var(--accent-bg);box-shadow:0 0 0 3px rgba(61,122,58,0.12); }
-.todo-task.dragging { position:fixed!important;z-index:9999;opacity:0.92;box-shadow:0 8px 24px rgba(0,0,0,0.18);cursor:grabbing;transition:transform 0.15s ease,left 0s,top 0s; }
-.todo-task-placeholder { border-radius:8px;background:var(--accent-bg);border:1.5px dashed var(--accent);transition:height 0.2s ease;pointer-events:none;margin-bottom:0.45rem; }
+.todo-task.dragging { opacity:0.32;transform:scale(0.96); }
+.todo-task.drag-above { box-shadow:0 -3px 0 0 var(--accent);transform:translateY(14px); }
+.todo-task.drag-below { box-shadow:0 3px 0 0 var(--accent);transform:translateY(-14px); }
+.todo-task.tray-drop-target { border-color:#e88050;background:#fff8f4;box-shadow:0 0 0 3px rgba(232,128,80,0.18); }
 .todo-drag-handle { color:var(--faint);font-size:0.7rem;cursor:grab;flex-shrink:0;line-height:1; }
 .todo-task-title { flex:1;font-size:0.72rem;color:var(--text);line-height:1.45;word-break:break-word; }
-.todo-task-title-input { flex:1;min-width:0;font-size:0.72rem;color:var(--text);line-height:1.45;background:var(--bg2);border:1.5px solid var(--accent);border-radius:4px;padding:0.15rem 0.35rem;font-family:'DM Mono',monospace;outline:none;word-break:break-word; }
 .todo-del { background:none;border:none;cursor:pointer;color:var(--faint);font-size:0.75rem;padding:0 0.1rem;opacity:0;transition:opacity 0.12s;flex-shrink:0; }
 .todo-task:hover .todo-del { opacity:0.7; }
 .todo-task:hover .todo-del:hover { opacity:1;color:#c06050; }
@@ -190,16 +186,15 @@ select option { background:#fff; }
 .todo-color-swatch.active { border-color:#333;transform:scale(1.1); }
 .todo-plant-btn { width:100%;margin-top:0.35rem;padding:0.48rem;font-size:0.7rem;border-radius:6px;border:1.5px solid var(--accent);background:var(--accent);cursor:pointer;color:#fff;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.04em;transition:background 0.15s; }
 .todo-plant-btn:hover { background:#3a8a28;border-color:#3a8a28; }
-.todo-edit-icon { background:none;border:none;cursor:pointer;color:var(--faint);font-size:0.6rem;padding:0 0.15rem;flex-shrink:0;opacity:0;transition:opacity 0.12s,color 0.12s;line-height:1; }
-.todo-task:hover .todo-edit-icon { opacity:0.6; }
-.todo-edit-icon:hover { opacity:1!important;color:var(--accent); }
 /* size picker */
 .todo-size-row { display:flex;gap:0.3rem;margin-bottom:0.1rem; }
 .todo-size-btn { flex:1;padding:0.34rem 0.2rem;border-radius:6px;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:0.58rem;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:0.04em;transition:border-color 0.12s,background 0.12s,color 0.12s; }
 .todo-size-btn:hover { border-color:var(--border2);color:var(--text); }
 .todo-size-btn.active { border-color:var(--accent);background:var(--accent-bg);color:var(--accent);font-weight:500; }
 /* moving ghost — faded placeholder while repositioning */
+.todo-task.moving-ghost { opacity:0.28;pointer-events:none;filter:grayscale(0.4); }
 /* floating move label */
+#move-flower-label { position:fixed;pointer-events:none;z-index:9999;padding:0.35rem 0.7rem;background:var(--card);border:1.5px solid var(--accent);border-radius:8px;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--text);box-shadow:0 4px 14px rgba(0,0,0,0.14);white-space:nowrap;display:none; }
 
 /* done tab items */
 .todo-done-item { display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.7rem;border-radius:7px;background:var(--card);border:1.5px solid var(--border);font-size:0.68rem;color:var(--muted); }
@@ -215,6 +210,10 @@ select option { background:#fff; }
 .tray-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
 .tray-tab:hover:not(.active) { color:var(--text); }
 
+/* unplant drop zone in tray */
+.tray-unplant-zone { margin:0.5rem;border:2px dashed #e09060;border-radius:8px;padding:0.55rem;text-align:center;font-size:0.58rem;color:#c07040;letter-spacing:0.03em;display:none;transition:background 0.15s; }
+.tray-unplant-zone.visible { display:block; }
+.tray-unplant-zone.hover { background:#fff3ed;border-color:#e08040; }
 
 /* drag ghost */
 #td-drag-ghost { position:fixed;top:-200px;left:-200px;padding:0.4rem 0.75rem;background:var(--card);border:1.5px solid var(--accent);border-radius:8px;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--text);box-shadow:0 4px 14px rgba(0,0,0,0.15);white-space:nowrap;pointer-events:none;z-index:9999; }
@@ -308,6 +307,12 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 .login-icon { font-size:2.2rem;margin-bottom:1rem; }
 .login-title { font-size:1rem;font-weight:500;margin-bottom:0.4rem; }
 .login-sub { font-size:0.65rem;color:var(--muted);line-height:1.7;margin-bottom:1.6rem; }
+.login-pat { margin-top:1rem;font-size:0.58rem;color:var(--faint); }
+.login-pat a { color:var(--muted);cursor:pointer;text-decoration:underline; }
+.pat-area { margin-top:1rem;display:none;flex-direction:column;gap:0.5rem;text-align:left; }
+.pat-area.show { display:flex; }
+.pat-input { width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:0.35rem 0.6rem;font-family:'DM Mono',monospace;font-size:0.68rem;outline:none; }
+.pat-input:focus { border-color:var(--border2); }
 #login-err { font-size:0.58rem;color:#c06050;margin-top:0.6rem;display:none; }
 </style>
 </head>
@@ -316,6 +321,21 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 <div class="bar" id="bar">
   <div class="logo">todo<em>garden</em></div>
   <div class="vr"></div>
+
+  <div class="fg" id="grp-org" style="display:none">
+    <div class="fl">Organization</div>
+    <select id="sel-org" onchange="onOrgChange()"><option value="">— select —</option></select>
+  </div>
+  <div class="fg" id="grp-proj" style="display:none">
+    <div class="fl">Project</div>
+    <select id="sel-proj" disabled onchange="onProjChange()"><option value="">— select —</option></select>
+  </div>
+  <div class="fg" id="grp-sprint" style="display:none">
+    <div class="fl">Sprint</div>
+    <select id="sel-sprint" disabled style="min-width:170px"><option value="">— select —</option></select>
+  </div>
+  <button class="btn primary" id="btn-sync" style="display:none" onclick="sessionType==='monday' ? mondaySyncBoard() : syncSprint()">Sync →</button>
+  <button class="btn" id="btn-clear-garden" style="display:none;font-size:0.58rem;color:#c06050;border-color:#e8a0a0" onclick="confirmClearGarden()" title="Clear saved garden for this sprint">🗑 clear garden</button>
 
   <div class="plant-banner" id="plant-banner">
     <div class="vr"></div>
@@ -350,9 +370,46 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
     <div class="login-title">Todo Garden</div>
     <div class="login-sub">Plant your tasks. Watch your garden grow.</div>
 
-    <button class="btn primary" onclick="loginTodo()" style="width:100%;justify-content:center;padding:0.5rem;gap:0.5rem">
-      <span style="font-size:1rem">🌿</span> Start
+    <!-- Azure DevOps -->
+    <button class="btn ms" onclick="loginMicrosoft()" style="width:100%;justify-content:center;padding:0.5rem">
+      <svg width="15" height="15" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      Sign in with Microsoft (Azure DevOps)
     </button>
+    <div class="login-pat">or use an <a onclick="togglePAT()">Azure PAT</a></div>
+    <div class="pat-area" id="pat-area">
+      <input class="pat-input" id="pat-org" placeholder="https://dev.azure.com/your-org" />
+      <input class="pat-input" id="pat-token" type="password" placeholder="Personal Access Token" />
+      <button class="btn primary" onclick="loginPAT()" style="width:100%;justify-content:center">Connect Azure</button>
+    </div>
+
+    <!-- divider -->
+    <div style="display:flex;align-items:center;gap:0.6rem;margin:1rem 0 0.2rem">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:0.55rem;color:var(--faint);letter-spacing:0.08em">OR</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <!-- My Todo -->
+    <button class="btn" onclick="loginTodo()" style="width:100%;justify-content:center;padding:0.5rem;margin-top:0.3rem;gap:0.5rem">
+      <span style="font-size:1rem">🌿</span> My Todo <span style="font-size:0.55rem;color:var(--faint);margin-left:0.2rem">local · no account needed</span>
+    </button>
+
+    <!-- divider -->
+    <div style="display:flex;align-items:center;gap:0.6rem;margin:1rem 0 0.2rem">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:0.55rem;color:var(--faint);letter-spacing:0.08em">OR</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <!-- Monday.com -->
+    <div class="login-pat" style="margin-top:0.3rem"><a onclick="toggleMonday()">Connect Monday.com</a></div>
+    <div class="pat-area" id="monday-area">
+      <input class="pat-input" id="monday-token" type="password" placeholder="Monday API token" />
+      <div style="font-size:0.52rem;color:var(--faint);line-height:1.6">
+        Find it in Monday → Profile → Developers → API v2 Token
+      </div>
+      <button class="btn primary" onclick="loginMonday()" style="width:100%;justify-content:center;background:#f6533b;border-color:#f6533b">Connect Monday.com</button>
+    </div>
 
     <div id="login-err"></div>
   </div>
@@ -361,44 +418,67 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 <!-- Main app -->
 <div class="body" id="main-body" style="display:none">
   <div class="tray">
-    <!-- Tray header: garden selector -->
+    <!-- Tray header: project + sprint hierarchy -->
     <div class="tray-hdr" id="tray-hdr">
-      <div class="tray-hdr-section" id="tray-garden-section">
-        <!-- Garden title row: name + dropdown trigger -->
-        <div class="garden-title-row" id="garden-title-row" onclick="tdToggleGardenDropdown()" ondblclick="event.stopPropagation();tdStartRename()">
-          <span class="garden-title" id="garden-title-text">Todo Garden</span>
-          <span class="garden-title-chevron" id="garden-title-chevron">▾</span>
-          <div class="garden-title-actions">
-            <button class="tsh-btn" id="tray-ren-garden" onclick="event.stopPropagation();tdStartRename()" title="Rename">✎</button>
-            <button class="tsh-btn tsh-del" id="tray-del-garden" onclick="event.stopPropagation();tdDeleteGarden()" title="Delete garden">✕</button>
+      <div id="tray-hdr-empty" class="tray-hdr-empty" style="display:none">
+        <div style="margin-bottom:0.55rem;color:var(--faint)">🌱 No projects yet</div>
+        <button class="tray-add-btn" style="font-size:0.65rem;padding:0.45rem" onclick="tdShowCreateProject()">+ New project</button>
+      </div>
+      <!-- Project section -->
+      <div class="tray-hdr-section" id="tray-proj-section" style="display:none">
+        <div class="tray-hdr-label">
+          <span>Project</span>
+          <div class="tray-hdr-label-actions">
+            <button class="tsh-btn" id="tray-ren-proj" onclick="tdRenameProject()" title="Rename">✎</button>
+            <button class="tsh-btn tsh-del" id="tray-del-proj" onclick="tdDeleteProject()" title="Delete project">✕</button>
+            <button class="tsh-btn" onclick="tdShowCreateProject()" title="New project" id="tray-new-proj-btn">+ new</button>
           </div>
         </div>
-        <!-- Inline rename -->
-        <div class="garden-rename-row" id="garden-rename-row" style="display:none">
-          <input id="garden-rename-input" class="garden-rename-input" placeholder="Garden name…" onkeydown="if(event.key==='Enter')tdConfirmRename();if(event.key==='Escape')tdCancelRename()"/>
-          <button class="tsh-btn" onclick="tdConfirmRename()" title="Save" style="font-size:0.75rem;color:var(--accent)">✓</button>
-          <button class="tsh-btn" onclick="tdCancelRename()" title="Cancel">✕</button>
+        <div class="tray-hdr-select-row">
+          <select id="tray-proj-sel" class="tray-hdr-select"></select>
+          <span class="tray-hdr-chevron">▾</span>
         </div>
-        <!-- Dropdown panel (gardens list + new) -->
-        <div class="garden-dropdown" id="garden-dropdown" style="display:none">
-          <div class="garden-dropdown-list" id="garden-dropdown-list"></div>
-          <button class="garden-dropdown-new" onclick="tdShowCreateGarden()">+ New Garden</button>
+        <div class="tray-hdr-create" id="tray-create-proj" style="display:none">
+          <input id="tray-create-proj-input" placeholder="Project name…" onkeydown="if(event.key==='Enter')tdConfirmCreateProject();if(event.key==='Escape')tdHideCreateProject()"/>
+          <button class="ok" onclick="tdConfirmCreateProject()">Create</button>
+          <button onclick="tdHideCreateProject()">✕</button>
         </div>
-        <!-- Inline create (shown inside dropdown) -->
-        <div class="tray-hdr-create" id="tray-create-garden" style="display:none">
-          <input id="tray-create-garden-input" placeholder="Garden name…" onkeydown="if(event.key==='Enter')tdConfirmCreateGarden();if(event.key==='Escape')tdHideCreateGarden()"/>
-          <button class="ok" onclick="tdConfirmCreateGarden()">Create</button>
-          <button onclick="tdHideCreateGarden()">✕</button>
-        </div>
-        <!-- Progress bar -->
-        <div class="garden-progress" id="tray-progress-row" style="display:none">
-          <div class="garden-progress-info">
-            <span id="tray-progress-pct" class="garden-progress-pct">0%</span>
-            <span class="garden-progress-stats"><span id="prog-chip-done">0</span> planted · <span id="prog-chip-todo">0</span> left</span>
+      </div>
+      <!-- Sprint section -->
+      <div class="tray-hdr-section" id="tray-sprint-section" style="display:none">
+        <div class="tray-hdr-label">
+          <span>Sprint</span>
+          <div class="tray-hdr-label-actions">
+            <button class="tsh-btn" id="tray-ren-sprint" onclick="tdRenameSprint()" title="Rename">✎</button>
+            <button class="tsh-btn tsh-del" id="tray-del-sprint" onclick="tdDeleteSprint()" title="Delete sprint">✕</button>
+            <button class="tsh-btn" onclick="tdShowCreateSprint()" title="New sprint" id="tray-new-sprint-btn">+ new</button>
           </div>
-          <div class="garden-progress-track">
-            <div class="garden-progress-fill" id="garden-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="tray-hdr-select-row">
+          <select id="tray-sprint-sel" class="tray-hdr-select"></select>
+          <span class="tray-hdr-chevron">▾</span>
+        </div>
+        <!-- Progress ring + stats -->
+        <div class="tray-progress-row" id="tray-progress-row" style="display:none">
+          <svg class="tray-ring" viewBox="0 0 32 32" id="tray-ring-svg">
+            <circle cx="16" cy="16" r="13" fill="none" stroke="var(--border)" stroke-width="3"/>
+            <circle cx="16" cy="16" r="13" fill="none" stroke="var(--accent)" stroke-width="3"
+              stroke-linecap="round" stroke-dasharray="81.68" stroke-dashoffset="81.68"
+              id="tray-ring-arc" style="transition:stroke-dashoffset 0.6s cubic-bezier(0.34,1.2,0.64,1);transform:rotate(-90deg);transform-origin:center"/>
+          </svg>
+          <div class="tray-progress-text">
+            <span id="tray-progress-pct" style="font-size:0.7rem;font-weight:600;color:var(--text)">0%</span>
+            <span id="tray-progress-sub" style="font-size:0.48rem;color:var(--faint)">planted</span>
           </div>
+          <div class="tray-progress-chips">
+            <span class="tray-prog-chip todo-chip" id="prog-chip-todo">0 left</span>
+            <span class="tray-prog-chip done-chip" id="prog-chip-done">0 done</span>
+          </div>
+        </div>
+        <div class="tray-hdr-create" id="tray-create-sprint" style="display:none">
+          <input id="tray-create-sprint-input" placeholder="Sprint name…" onkeydown="if(event.key==='Enter')tdConfirmCreateSprint();if(event.key==='Escape')tdHideCreateSprint()"/>
+          <button class="ok" onclick="tdConfirmCreateSprint()">Create</button>
+          <button onclick="tdHideCreateSprint()">✕</button>
         </div>
       </div>
     </div>
@@ -413,8 +493,9 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
       <button class="tray-add-btn" onclick="tdTrayAddTask()">＋ Add Task</button>
     </div>
     <!-- Unplant drop zone (shown when holding a flower) -->
+    <div class="tray-unplant-zone" id="tray-unplant-zone">🌿 Drop here to unplant</div>
     <div class="tray-scroll" id="tray-scroll">
-      <div style="text-align:center;color:var(--faint);font-size:0.62rem;line-height:2;padding:1.5rem 0.5rem">Pick a garden to start</div>
+      <div style="text-align:center;color:var(--faint);font-size:0.62rem;line-height:2;padding:1.5rem 0.5rem">Pick a sprint to start</div>
     </div>
     <div class="tray-foot" id="tray-foot-todo" style="display:none">
       <span class="chip">seeds <b id="n-seeds">0</b></span>
@@ -433,6 +514,7 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 <!-- Floating seed cursor -->
 <div id="seed-cursor">🌱</div>
 <div id="td-drag-ghost">🌱</div>
+<div id="move-flower-label"></div>
 
 <div class="tt" id="tt"></div>
 
@@ -440,10 +522,17 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 // ══════════════════════════════════════════════
 // AUTH + PERSISTENCE
 // ══════════════════════════════════════════════
+const MSAL_CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+const ADO_SCOPE = '499b84ac-1321-427f-aa17-267ca6975798/.default';
 const LS_KEY = 'tg_session'; // localStorage key
-let sessionType = 'todo';
 
-// ── Persistence helpers ──
+let msalApp = null;
+let authToken = null;
+let patMode = { org: null, token: null };
+let mondayMode = { token: null };
+let sessionType = null; // 'msal' | 'pat' | 'monday'
+
+// ── Try restore from localStorage ──
 function saveSession(type, data) {
   try { localStorage.setItem(LS_KEY, JSON.stringify({ type, data, ts: Date.now() })); } catch(e){}
 }
@@ -451,18 +540,173 @@ function loadSession() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const s = JSON.parse(raw);
+    // expire after 7 days
+    if (Date.now() - s.ts > 7*24*60*60*1000) { localStorage.removeItem(LS_KEY); return null; }
+    return s;
   } catch(e) { return null; }
 }
 function clearSession() { try { localStorage.removeItem(LS_KEY); } catch(e){} }
 
+// ── Save selections ──
 function saveSelections() {
   try {
-    localStorage.setItem('tg_sel', JSON.stringify({ garden: tdGardenId }));
+    if (sessionType === 'todo') {
+      localStorage.setItem('tg_sel', JSON.stringify({ proj: tdProjId, sprint: tdSprintId }));
+      return;
+    }
+    const org = document.getElementById('sel-org').value;
+    const proj = document.getElementById('sel-proj').value;
+    const sprint = document.getElementById('sel-sprint').value;
+    localStorage.setItem('tg_sel', JSON.stringify({ org, proj, sprint }));
   } catch(e){}
+}
+function loadSelections() {
+  try { return JSON.parse(localStorage.getItem('tg_sel')||'{}'); } catch(e) { return {}; }
+}
+
+// ── MSAL init ──
+try {
+  msalApp = new msal.PublicClientApplication({
+    auth: { clientId: MSAL_CLIENT_ID, authority: 'https://login.microsoftonline.com/common', redirectUri: window.location.href.split('?')[0] },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true } // localStorage for persistence
+  });
+  msalApp.handleRedirectPromise().then(r => { if(r) handleAuthResult(r); else tryRestore(); }).catch(e => { showErr(e.message); tryRestore(); });
+} catch(e) { console.warn('MSAL unavailable'); tryRestore(); }
+
+async function tryRestore() {
+  // Try silent MSAL first
+  if (msalApp && MSAL_CLIENT_ID !== 'YOUR_CLIENT_ID_HERE') {
+    const accounts = msalApp.getAllAccounts();
+    if (accounts.length > 0) {
+      try {
+        const tr = await msalApp.acquireTokenSilent({ scopes:[ADO_SCOPE], account:accounts[0] });
+        authToken = tr.accessToken;
+        sessionType = 'msal';
+        showUserBadge(accounts[0].name || accounts[0].username, null);
+        showApp();
+        await restoreSelections();
+        return;
+      } catch(e) { /* silent failed, fall through */ }
+    }
+  }
+
+  // Try PAT from localStorage
+  const session = loadSession();
+  if (session?.type === 'pat') {
+    patMode = session.data;
+    sessionType = 'pat';
+    showUserBadge('PAT user', null);
+    showApp();
+    await restoreSelections();
+    return;
+  }
+  if (session?.type === 'todo') {
+    sessionType = 'todo';
+    loginTodo();
+    return;
+  }
+  if (session?.type === 'monday') {
+    mondayMode = session.data;
+    sessionType = 'monday';
+    showUserBadge('Monday.com', null);
+    showApp();
+    await restoreSelections();
+    return;
+  }
+
+  // Show login
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function restoreSelections() {
+  const saved = loadSelections();
+  showAllControls();
+  if (sessionType === 'monday') {
+    document.getElementById('grp-org').style.display = 'none';
+    await mondayLoadBoards(saved.proj, saved.sprint);
+    return;
+  }
+  if (sessionType === 'pat' && patMode.org) {
+    const sel = document.getElementById('sel-org');
+    sel.innerHTML = `<option value="${patMode.org}">${patMode.org.replace('https://dev.azure.com/','')}</option>`;
+    await loadProjects(patMode.org, saved.proj, saved.sprint);
+    return;
+  }
+  await loadOrgs(saved.org, saved.proj, saved.sprint);
+}
+
+function showAllControls() {
+  ['grp-org','grp-proj','grp-sprint'].forEach(id => document.getElementById(id).style.display='flex');
+  document.getElementById('btn-sync').style.display = 'inline-flex';
+}
+
+async function loginMicrosoft() {
+  if (!msalApp || MSAL_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+    showErr('Set your Azure AD client ID first, or use PAT login below.');
+    document.getElementById('pat-area').classList.add('show');
+    return;
+  }
+  try {
+    const r = await msalApp.loginPopup({ scopes: [ADO_SCOPE] });
+    handleAuthResult(r);
+  } catch(e) { showErr(e.message); }
+}
+
+async function handleAuthResult(r) {
+  if (!r) return;
+  try {
+    const acc = msalApp.getAllAccounts()[0];
+    const tr = await msalApp.acquireTokenSilent({ scopes:[ADO_SCOPE], account:acc });
+    authToken = tr.accessToken; sessionType = 'msal';
+    showUserBadge(acc.name || acc.username, null);
+    showApp(); showAllControls();
+    const saved = loadSelections();
+    await loadOrgs(saved.org, saved.proj, saved.sprint);
+  } catch(e) { showErr(e.message); }
+}
+
+function togglePAT() { document.getElementById('pat-area').classList.toggle('show'); }
+function toggleMonday() { document.getElementById('monday-area').classList.toggle('show'); }
+
+async function loginMonday() {
+  const tok = document.getElementById('monday-token').value.trim();
+  if (!tok) { showErr('Enter your Monday.com API token'); return; }
+  // quick validation — fetch the viewer's name
+  setStatus('spin', 'Connecting to Monday.com…');
+  try {
+    const r = await mondayFetch('{ me { name } }');
+    const name = r?.data?.me?.name || 'Monday user';
+    mondayMode = { token: tok };
+    sessionType = 'monday';
+    saveSession('monday', mondayMode);
+    showUserBadge(name, null);
+    showApp(); showAllControls();
+    // hide org selector — Monday doesn't have orgs
+    document.getElementById('grp-org').style.display = 'none';
+    await mondayLoadBoards(null, null);
+  } catch(e) { showErr('Monday.com: ' + e.message); setStatus('err', e.message); }
+}
+
+async function loginPAT() {
+  const org = document.getElementById('pat-org').value.trim().replace(/\/$/,'');
+  const tok = document.getElementById('pat-token').value.trim();
+  if (!org||!tok) { showErr('Enter org URL and PAT'); return; }
+  patMode = { org, token: tok }; sessionType = 'pat';
+  saveSession('pat', patMode);
+  showUserBadge('PAT user', null);
+  showApp(); showAllControls();
+  document.getElementById('sel-org').innerHTML = `<option value="${org}">${org.replace('https://dev.azure.com/','')}</option>`;
+  await loadProjects(org, null, null);
 }
 
 function showErr(m) { const e=document.getElementById('login-err'); e.textContent=m; e.style.display='block'; }
+function showUserBadge(n) {
+  document.getElementById('user-name').textContent = n;
+  const av = document.getElementById('user-av');
+  av.textContent = (n||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+  document.getElementById('user-area').style.display = 'flex';
+}
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-body').style.display = 'flex';
@@ -470,32 +714,31 @@ function showApp() {
 }
 function logout() {
   clearSession(); localStorage.removeItem('tg_sel');
-  sessionType = null;
-  location.reload();
+  authToken = null; patMode = { org:null, token:null }; mondayMode = { token:null }; sessionType = null;
+  if (msalApp) msalApp.logout(); else location.reload();
 }
 
 // ══════════════════════════════════════════════════════
-// MY TODO — local-only garden/task manager
+// MY TODO — local-only project/sprint/task manager
 // ══════════════════════════════════════════════════════
 
 const TD_KEY     = 'tg_todo_data';
-const TD_SEL_KEY = 'tg_todo_sel';
+const TD_SEL_KEY = 'tg_todo_sel';   // separate from Azure tg_sel
 
-let tdData     = { gardens: [] };
-let tdGardenId = null;
+let tdData     = { projects: [] };
+let tdProjId   = null;
+let tdSprintId = null;
 
 // ── Persist helpers ──
 function tdLoad() {
-  try { tdData = JSON.parse(localStorage.getItem(TD_KEY)) || { gardens:[] }; }
-  catch(e) { tdData = { gardens:[] }; }
-  // ensure gardens array exists (handles old data gracefully)
-  if (!tdData.gardens) tdData = { gardens: [] };
+  try { tdData = JSON.parse(localStorage.getItem(TD_KEY)) || { projects:[] }; }
+  catch(e) { tdData = { projects:[] }; }
 }
 function tdSave() {
   try { localStorage.setItem(TD_KEY, JSON.stringify(tdData)); } catch(e) {}
 }
 function tdSaveSel() {
-  try { localStorage.setItem(TD_SEL_KEY, JSON.stringify({ garden: tdGardenId })); } catch(e) {}
+  try { localStorage.setItem(TD_SEL_KEY, JSON.stringify({ proj: tdProjId, sprint: tdSprintId })); } catch(e) {}
 }
 function tdLoadSel() {
   try { return JSON.parse(localStorage.getItem(TD_SEL_KEY) || '{}'); } catch(e) { return {}; }
@@ -509,10 +752,11 @@ function tdSwitchTab(tab) {
   buildTray();
 }
 
-// ── Current garden accessor ──
-function tdGetGarden() {
-  if (!tdGardenId) return null;
-  return tdData.gardens.find(g => g.id === tdGardenId) || null;
+// ── Current sprint accessor ──
+function tdGetSprint() {
+  if (!tdProjId || !tdSprintId) return null;
+  const proj = tdData.projects.find(p => p.id === tdProjId);
+  return proj ? (proj.sprints.find(s => s.id === tdSprintId) || null) : null;
 }
 
 // ── Entry point ──
@@ -523,8 +767,8 @@ function loginTodo() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-body').style.display = 'flex';
 
-  // hide bar elements not used in todo mode
-  ['user-area','bar-chip-seeds','bar-chip-planted']
+  // hide azure/monday bar elements, show sign out
+  ['grp-org','grp-proj','grp-sprint','btn-sync','btn-clear-garden','user-area','bar-chip-seeds','bar-chip-planted']
     .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
 
   // add sign-out to bar if not already there
@@ -539,159 +783,133 @@ function loginTodo() {
     bar.appendChild(btn);
   }
 
-  // Auto-create default garden on first launch
-  if (!tdData.gardens.length) {
-    const g = { id: tdUID(), name: 'Todo Garden', tasks: [{ id: tdUID(), title: 'Motivational Seed 🌱', done: false, color: 'green' }] };
-    tdData.gardens.push(g);
-    tdSave();
-  }
+  // wire tray selectors (one time)
+  document.getElementById('tray-proj-sel').onchange   = () => tdSetProject(document.getElementById('tray-proj-sel').value || null);
+  document.getElementById('tray-sprint-sel').onchange = () => tdSetSprint(document.getElementById('tray-sprint-sel').value || null);
 
-  // restore saved garden
+  // restore saved project/sprint
   const sel = tdLoadSel();
-  tdGardenId = sel.garden || null;
-  if (!tdData.gardens.find(g => g.id === tdGardenId)) {
-    tdGardenId = tdData.gardens[0]?.id || null;
-  }
+  tdProjId   = sel.proj   || null;
+  tdSprintId = sel.sprint || null;
+  const proj = tdData.projects.find(p => p.id === tdProjId);
+  if (!proj) { tdProjId = null; tdSprintId = null; }
+  else if (!proj.sprints.find(s => s.id === tdSprintId)) { tdSprintId = null; }
 
   tdRepopulateBar();
-  tdApplyGarden();
+  tdApplySprint();
   resize(); startLoop();
 }
 
-// ── Repopulate the garden title + dropdown ──
+// ── Repopulate the project+sprint dropdowns in the tray ──
 function tdRepopulateBar() {
-  const garden = tdGetGarden();
-  // Update title text
-  const titleEl = document.getElementById('garden-title-text');
-  if (titleEl) titleEl.textContent = garden ? garden.name : 'Select Garden';
+  const projSel    = document.getElementById('tray-proj-sel');
+  const sprintSel  = document.getElementById('tray-sprint-sel');
+  if (!projSel) return;
+  projSel.onchange = null; sprintSel.onchange = null;
 
-  // hide delete button when only 1 garden
-  const delBtn = document.getElementById('tray-del-garden');
-  if (delBtn) delBtn.style.display = tdData.gardens.length > 1 ? '' : 'none';
+  const hasProjects = tdData.projects.length > 0;
+  const proj        = tdData.projects.find(p => p.id === tdProjId);
+  const sprint      = proj?.sprints.find(s => s.id === tdSprintId);
 
-  // Rebuild dropdown list
-  tdRebuildDropdownList();
-}
+  // Empty state
+  const emptyEl = document.getElementById('tray-hdr-empty');
+  if (emptyEl) emptyEl.style.display = hasProjects ? 'none' : 'block';
 
-function tdRebuildDropdownList() {
-  const list = document.getElementById('garden-dropdown-list');
-  if (!list) return;
-  list.innerHTML = '';
-  tdData.gardens.forEach(g => {
-    const item = document.createElement('div');
-    item.className = 'garden-dropdown-item' + (g.id === tdGardenId ? ' active' : '');
-    item.textContent = g.name;
-    item.onclick = (e) => { e.stopPropagation(); tdSetGarden(g.id); tdCloseGardenDropdown(); };
-    list.appendChild(item);
-  });
-}
+  // Project section
+  const projSec = document.getElementById('tray-proj-section');
+  if (projSec) projSec.style.display = hasProjects ? 'block' : 'none';
+  projSel.innerHTML = '';
+  if (!tdProjId) projSel.appendChild(new Option('— select project —', ''));
+  tdData.projects.forEach(p => projSel.appendChild(new Option(p.name, p.id)));
+  projSel.value = tdProjId || '';
+  const show = (v,el) => { const e=document.getElementById(el); if(e) e.style.display=v?'':'none'; };
+  show(tdProjId, 'tray-ren-proj'); show(tdProjId, 'tray-del-proj');
 
-// ── Garden dropdown toggle (debounced to avoid firing on dblclick) ──
-let _gardenClickTimer = null;
-function tdToggleGardenDropdown() {
-  if (_gardenClickTimer) return; // already pending
-  _gardenClickTimer = setTimeout(() => {
-    _gardenClickTimer = null;
-    const dd = document.getElementById('garden-dropdown');
-    const chev = document.getElementById('garden-title-chevron');
-    if (!dd) return;
-    const isOpen = dd.style.display !== 'none';
-    dd.style.display = isOpen ? 'none' : 'block';
-    if (chev) chev.classList.toggle('open', !isOpen);
-    if (!isOpen) tdRebuildDropdownList();
-  }, 220);
-}
-function tdCloseGardenDropdown() {
-  const dd = document.getElementById('garden-dropdown');
-  const chev = document.getElementById('garden-title-chevron');
-  if (dd) dd.style.display = 'none';
-  if (chev) chev.classList.remove('open');
-}
+  // Sprint section
+  const sprintSec = document.getElementById('tray-sprint-section');
+  if (sprintSec) sprintSec.style.display = tdProjId ? 'block' : 'none';
+  sprintSel.innerHTML = '';
+  if (!tdSprintId) sprintSel.appendChild(new Option('— select sprint —', ''));
+  if (proj) proj.sprints.forEach(s => sprintSel.appendChild(new Option(s.name, s.id)));
+  sprintSel.value = tdSprintId || '';
+  show(tdSprintId, 'tray-ren-sprint'); show(tdSprintId, 'tray-del-sprint');
 
-// ── Inline rename ──
-function tdStartRename() {
-  // cancel pending single-click (dropdown toggle)
-  if (_gardenClickTimer) { clearTimeout(_gardenClickTimer); _gardenClickTimer = null; }
-  tdCloseGardenDropdown();
-  const garden = tdGetGarden(); if (!garden) return;
-  document.getElementById('garden-title-row').style.display = 'none';
-  const row = document.getElementById('garden-rename-row');
-  const input = document.getElementById('garden-rename-input');
-  row.style.display = 'flex';
-  input.value = garden.name;
-  setTimeout(() => { input.focus(); input.select(); }, 50);
-}
-function tdConfirmRename() {
-  const garden = tdGetGarden(); if (!garden) return;
-  const input = document.getElementById('garden-rename-input');
-  const name = (input?.value || '').trim();
-  if (name) { garden.name = name; tdSave(); }
-  tdCancelRename();
-  tdRepopulateBar();
-}
-function tdCancelRename() {
-  document.getElementById('garden-rename-row').style.display = 'none';
-  document.getElementById('garden-title-row').style.display = 'flex';
-}
+  // Also update old td-bar-* selects if they still exist (azure compat)
+  const oldProj = document.getElementById('td-bar-proj');
+  if (oldProj) { oldProj.innerHTML=''; tdData.projects.forEach(p=>oldProj.appendChild(new Option(p.name,p.id))); oldProj.value=tdProjId||''; }
+  const oldSprint = document.getElementById('td-bar-sprint');
+  if (oldSprint) { oldSprint.innerHTML=''; if(proj) proj.sprints.forEach(s=>oldSprint.appendChild(new Option(s.name,s.id))); oldSprint.value=tdSprintId||''; }
 
-// ── Click-outside dismisses edit modes ──
-document.addEventListener('mousedown', e => {
-  // garden rename: click outside cancels
-  const renameRow = document.getElementById('garden-rename-row');
-  if (renameRow && renameRow.style.display !== 'none' && !renameRow.contains(e.target)) {
-    tdCancelRename();
-  }
-  // task edit: click outside cancels
-  if (_tdEditingTaskId) {
-    const editInput = document.getElementById('td-edit-task-input');
-    if (editInput && !editInput.closest('.todo-task')?.contains(e.target)) {
-      tdCancelEditTask();
-    }
-  }
-});
+  projSel.onchange   = () => tdSetProject(projSel.value   || null);
+  sprintSel.onchange = () => tdSetSprint(sprintSel.value  || null);
+}
 
 // ── Inline create helpers ──
-function tdShowCreateGarden() {
-  const c = document.getElementById('tray-create-garden');
-  if(c) { c.style.display='flex'; setTimeout(()=>document.getElementById('tray-create-garden-input')?.focus(),50); }
+function tdShowCreateProject() {
+  // make sure the project section is visible (may be hidden when no projects exist)
+  const sec = document.getElementById('tray-proj-section'); if(sec) sec.style.display='block';
+  const empty = document.getElementById('tray-hdr-empty'); if(empty) empty.style.display='none';
+  const c = document.getElementById('tray-create-proj'); if(c) { c.style.display='flex'; setTimeout(()=>document.getElementById('tray-create-proj-input')?.focus(),50); }
 }
-function tdHideCreateGarden() {
-  const c = document.getElementById('tray-create-garden'); if(c) c.style.display='none';
-  const i = document.getElementById('tray-create-garden-input'); if(i) i.value='';
+function tdHideCreateProject() {
+  const c = document.getElementById('tray-create-proj'); if(c) c.style.display='none';
+  const i = document.getElementById('tray-create-proj-input'); if(i) i.value='';
+  // if no projects, hide the section and show empty state again
+  if (!tdData.projects.length) {
+    const sec = document.getElementById('tray-proj-section'); if(sec) sec.style.display='none';
+    const empty = document.getElementById('tray-hdr-empty'); if(empty) empty.style.display='block';
+  }
 }
-function tdConfirmCreateGarden() {
-  const i = document.getElementById('tray-create-garden-input');
-  const name = (i?.value||'').trim() || `Garden ${tdData.gardens.length+1}`;
-  const g = { id: tdUID(), name, tasks: [{ id: tdUID(), title: 'Motivational Seed 🌱', done: false, color: 'green' }] };
-  tdData.gardens.push(g); tdSave();
-  tdGardenId = g.id;
-  tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
-  tdHideCreateGarden();
-  tdCloseGardenDropdown();
+function tdConfirmCreateProject() {
+  const i = document.getElementById('tray-create-proj-input');
+  const name = (i?.value||'').trim(); if(!name) return;
+  const p = { id: tdUID(), name, sprints: [] };
+  tdData.projects.push(p); tdSave();
+  tdProjId = p.id; tdSprintId = null;
+  tdSaveSel(); tdRepopulateBar(); buildTray();
+  tdHideCreateProject();
+}
+function tdShowCreateSprint() {
+  if (!tdProjId) return;
+  const c = document.getElementById('tray-create-sprint'); if(c) { c.style.display='flex'; setTimeout(()=>document.getElementById('tray-create-sprint-input')?.focus(),50); }
+}
+function tdHideCreateSprint() {
+  const c = document.getElementById('tray-create-sprint'); if(c) c.style.display='none';
+  const i = document.getElementById('tray-create-sprint-input'); if(i) i.value='';
+}
+function tdConfirmCreateSprint() {
+  const i = document.getElementById('tray-create-sprint-input');
+  const proj = tdData.projects.find(p=>p.id===tdProjId); if(!proj) return;
+  const name = (i?.value||'').trim() || `Sprint ${proj.sprints.length+1}`;
+  const s = { id: tdUID(), name, tasks: [{ id: tdUID(), title: 'Motivation Seed 🌱', done: false, color: 'green' }] };
+  proj.sprints.push(s); tdSave();
+  tdSprintId = s.id;
+  tdSaveSel(); tdRepopulateBar(); tdApplySprint();
+  tdHideCreateSprint();
 }
 
-// ── Called whenever garden context changes — syncs seeds+garden+tray ──
-// Track which garden's canvas is currently loaded in `planted`
-let _tdLoadedGardenKey = null;
+// ── Called whenever sprint context changes — syncs seeds+garden+tray ──
+// Track which sprint's garden is currently loaded in `planted`
+let _tdLoadedSprintKey = null;
 let _tdExpandedId = null;
 
-function tdApplyGarden() {
-  const garden = tdGetGarden();
-  const gkey = gardenKey();
+function tdApplySprint() {
+  const sprint = tdGetSprint();
+  const gkey = `tg_garden::todo::${tdProjId}::${tdSprintId}`;
 
-  if (!garden) {
+  if (!sprint) {
     seeds = []; planted = [];
-    _tdLoadedGardenKey = null;
+    _tdLoadedSprintKey = null;
     buildTray(); updateDropHint();
     document.getElementById('n-planted').textContent = 0;
     return;
   }
 
-  const switching = _tdLoadedGardenKey !== gkey;
+  const switching = _tdLoadedSprintKey !== gkey;
 
   if (switching) {
-    // Save outgoing garden's live canvas before clearing
-    if (_tdLoadedGardenKey) {
+    // Save outgoing sprint's live garden before clearing
+    if (_tdLoadedSprintKey) {
       try {
         const outData = planted.map(p => ({
           id: p.id, title: p.title, type: p.type, owner: p.owner,
@@ -699,21 +917,21 @@ function tdApplyGarden() {
           color: p.color, size: p.size, dueDate: p.dueDate || null,
           x: p.x, y: p.y, plantedAt: p.plantedAt
         }));
-        localStorage.setItem(_tdLoadedGardenKey, JSON.stringify({ data: outData, ts: Date.now() }));
+        localStorage.setItem(_tdLoadedSprintKey, JSON.stringify({ data: outData, ts: Date.now() }));
       } catch(e) {}
     }
-    // Load this garden's canvas from storage
+    // Load this sprint's garden from storage
     planted = [];
     const savedPlants = loadGarden(gkey) || [];
     const plantedIds  = new Set(savedPlants.map(p => p.id));
-    garden.tasks.forEach(t => { if (plantedIds.has(t.id)) t.done = true; });
+    sprint.tasks.forEach(t => { if (plantedIds.has(t.id)) t.done = true; });
     tdSave();
     planted = savedPlants.map(p => {
-      const task = garden.tasks.find(t => t.id === p.id);
+      const task = sprint.tasks.find(t => t.id === p.id);
       if (!task) return null;
       return {
         id: p.id, title: task.title, type: 'task', owner: 'Me',
-        state: 'Done', priority: 'medium', sprint: garden.name,
+        state: 'Done', priority: 'medium', sprint: sprint.name,
         seed: Math.abs(p.id.split('').reduce((a,c) => a + c.charCodeAt(0), 0)) || 1,
         color: p.color || task.color || null,
         size: p.size || task.size || 'medium',
@@ -721,19 +939,19 @@ function tdApplyGarden() {
         x: p.x, y: p.y, plantedAt: p.plantedAt || (Date.now() - 10000), planted: true
       };
     }).filter(Boolean);
-    _tdLoadedGardenKey = gkey;
+    _tdLoadedSprintKey = gkey;
   } else {
-    // Same garden — just sync done flags from live planted (don't touch planted array)
+    // Same sprint — just sync done flags from live planted (don't touch planted array)
     const livePlantedIds = new Set(planted.map(p => p.id));
-    garden.tasks.forEach(t => { if (livePlantedIds.has(t.id)) t.done = true; });
+    sprint.tasks.forEach(t => { if (livePlantedIds.has(t.id)) t.done = true; });
   }
 
   // Rebuild seeds = undone tasks
-  seeds = garden.tasks
+  seeds = sprint.tasks
     .filter(t => !t.done)
     .map((t, i) => ({
       id: t.id, title: t.title, type: 'task', owner: 'Me',
-      state: 'Todo', priority: 'medium', sprint: garden.name,
+      state: 'Todo', priority: 'medium', sprint: sprint.name,
       seed: Math.abs(t.id.split('').reduce((a,c) => a + c.charCodeAt(0), 0)) || i+1,
       color: t.color || null,
       size: t.size || 'medium',
@@ -746,23 +964,54 @@ function tdApplyGarden() {
   buildTray();
 }
 
-// ── Convenience: set garden (user picked from dropdown) ──
-function tdSetGarden(id) {
-  tdGardenId = id || null;
+// ── Convenience: set project (user picked from dropdown) ──
+function tdSetProject(id) {
+  tdProjId   = id || null;
+  tdSprintId = null;
+  // auto-select first sprint
+  const proj = tdData.projects.find(p => p.id === tdProjId);
+  if (proj?.sprints.length) tdSprintId = proj.sprints[0].id;
   tdSaveSel();
   tdRepopulateBar();
-  tdApplyGarden();
+  tdApplySprint();
 }
 
-// ── CRUD: Garden ──
-function tdDeleteGarden() {
-  if (tdData.gardens.length <= 1) return; // can't delete last garden
-  const garden = tdGetGarden(); if (!garden) return;
-  if (!confirm(`Delete "${garden.name}" and all its tasks?`)) return;
-  tdData.gardens = tdData.gardens.filter(g => g.id !== tdGardenId);
-  tdGardenId = tdData.gardens[0]?.id || null;
-  planted = []; tdSave();
-  tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
+// ── Convenience: set sprint (user picked from dropdown) ──
+function tdSetSprint(id) {
+  tdSprintId = id || null;
+  tdSaveSel();
+  tdRepopulateBar();
+  tdApplySprint();
+}
+
+// ── CRUD: Project ──
+function tdNewProject() { tdShowCreateProject(); }  // now uses inline
+function tdRenameProject() {
+  const proj = tdData.projects.find(p => p.id === tdProjId); if (!proj) return;
+  const name = prompt('Rename project:', proj.name); if (!name?.trim()) return;
+  proj.name = name.trim(); tdSave(); tdRepopulateBar();
+}
+function tdDeleteProject() {
+  const proj = tdData.projects.find(p => p.id === tdProjId); if (!proj) return;
+  if (!confirm(`Delete "${proj.name}" and all its sprints?`)) return;
+  tdData.projects = tdData.projects.filter(p => p.id !== tdProjId);
+  tdProjId = null; tdSprintId = null; planted = []; tdSave();
+  tdSaveSel(); tdRepopulateBar(); tdApplySprint();
+}
+function tdNewSprint() { tdShowCreateSprint(); }  // now uses inline
+function tdRenameSprint() {
+  const sprint = tdGetSprint(); if (!sprint) return;
+  const name = prompt('Rename sprint:', sprint.name); if (!name?.trim()) return;
+  sprint.name = name.trim(); tdSave(); tdRepopulateBar(); buildTray();
+}
+function tdDeleteSprint() {
+  const sprint = tdGetSprint();
+  const proj   = tdData.projects.find(p => p.id === tdProjId);
+  if (!sprint || !proj) return;
+  if (!confirm(`Delete sprint "${sprint.name}"?`)) return;
+  proj.sprints = proj.sprints.filter(s => s.id !== tdSprintId);
+  tdSprintId = null; planted = []; tdSave();
+  tdSaveSel(); tdRepopulateBar(); tdApplySprint();
 }
 
 // ── CRUD: Task (called from tray input + tray card buttons) ──
@@ -770,63 +1019,444 @@ function tdTrayAddTask() {
   const input = document.getElementById('tray-task-input');
   const title = (input?.value || '').trim();
   if (!title) { input?.focus(); return; }
-  const garden = tdGetGarden();
-  if (!garden) return;
-  const newId = tdUID();
-  garden.tasks.push({ id: newId, title, done: false, color: 'red' });
-  _tdNewTaskIds.add(newId);
+  const sprint = tdGetSprint();
+  if (!sprint) return;
+  sprint.tasks.push({ id: tdUID(), title, done: false, color: 'red' });
   tdSave();
   input.value = '';
   input.focus();
-  tdApplyGarden();   // re-sync seeds + rebuild tray
+  tdApplySprint();   // re-sync seeds + rebuild tray
 }
 function tdToggleTask(taskId, done) {
-  const garden = tdGetGarden(); if (!garden) return;
-  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  const sprint = tdGetSprint(); if (!sprint) return;
+  const task = sprint.tasks.find(t => t.id === taskId); if (!task) return;
   task.done = done;
   if (!done) planted = planted.filter(p => p.id !== taskId);
-  tdSave(); tdApplyGarden(); saveGarden();
+  tdSave(); tdApplySprint(); saveGarden();
 }
 function tdDeleteTask(taskId) {
-  const garden = tdGetGarden(); if (!garden) return;
+  const sprint = tdGetSprint(); if (!sprint) return;
   if (selectedSeed?.id === taskId) cancelPlanting();
-  garden.tasks = garden.tasks.filter(t => t.id !== taskId);
+  sprint.tasks = sprint.tasks.filter(t => t.id !== taskId);
   planted = planted.filter(p => p.id !== taskId);
-  tdSave(); tdApplyGarden(); saveGarden();
+  tdSave(); tdApplySprint(); saveGarden();
 }
 
-// ── Inline task title editing ──
-let _tdEditingTaskId = null;
-let _tdNewTaskIds = new Set();  // IDs of tasks just added (for slide-in animation)
-function tdStartEditTask(taskId) {
-  _tdEditingTaskId = taskId;
-  _tdExpandedId = null; // collapse expanded panel while editing
-  buildTray();
-}
-function tdConfirmEditTask(taskId) {
-  const input = document.getElementById('td-edit-task-input');
-  const garden = tdGetGarden(); if (!garden) return;
-  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
-  const name = (input?.value || '').trim();
-  if (name) { task.title = name; tdSave(); }
-  _tdEditingTaskId = null;
-  tdApplyGarden();
-}
-function tdCancelEditTask() {
-  _tdEditingTaskId = null;
-  buildTray();
-}
-
-// legacy stubs
+// legacy stubs (keep in case any old reference exists)
 function tdAddTask()   {}
+function tdRenameTask() {}
 function tdBackToTodo() {}
 function tdGardenMode() {}
 function tdSyncSeeds()  {}
 function tdLoadGarden() {}
 function tdRefreshBar() { tdRepopulateBar(); }
 
+// gardenKey handles todo mode inline (see definition below)
 
+async function adoFetch(url, opts={}) {
+  const h = { ...(opts.headers||{}) };
+  if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+  else if (patMode.token) h['Authorization'] = `Basic ${btoa(':'+patMode.token)}`;
+  if (opts.body) h['Content-Type'] = 'application/json';
+  return fetch(url, { ...opts, headers: h });
+}
 
+// ── Monday.com GraphQL helper ──
+async function mondayFetch(query) {
+  // Monday v2 accepts token in the JSON body — avoids header-stripping by proxies
+  const body = JSON.stringify({ query, token: mondayMode.token });
+  const urls = [
+    'https://corsproxy.io/?url=https%3A%2F%2Fapi.monday.com%2Fv2',
+    'https://api.codetabs.com/v1/proxy?quest=https://api.monday.com/v2',
+  ];
+  let lastErr;
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      if (!r.ok) {
+        const txt = await r.text();
+        if (r.status === 401 || txt.includes('Not Authenticated')) throw new Error('Not Authenticated — check your token');
+        lastErr = new Error('Monday ' + r.status + ': ' + txt.slice(0,100)); continue;
+      }
+      const d = await r.json();
+      if (d.errors?.length) throw new Error(d.errors[0].message);
+      return d;
+    } catch(e) {
+      if (e.message.includes('Not Authenticated')) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Could not reach Monday.com');
+}
+
+async function mondayLoadBoards(savedProj, savedSprint) {
+  setStatus('spin', 'Loading boards…');
+  const selP = document.getElementById('sel-proj');
+  selP.innerHTML = '<option value="">loading…</option>'; selP.disabled = true;
+  try {
+    const d = await mondayFetch(`{
+      boards(limit: 50, order_by: used_at, board_kind: public) {
+        id name
+      }
+    }`);
+    const boards = d.data?.boards || [];
+    selP.innerHTML = '<option value="">— select board —</option>';
+    boards.forEach(b => {
+      const o = document.createElement('option');
+      o.value = b.id; o.textContent = b.name;
+      if (b.id === savedProj) o.selected = true;
+      selP.appendChild(o);
+    });
+    selP.disabled = false;
+    selP.onchange = () => { saveSelections(); mondayLoadGroups(selP.value, null); };
+    if (savedProj && selP.value === savedProj) {
+      await mondayLoadGroups(savedProj, savedSprint);
+    } else if (!savedProj && boards.length > 0) {
+      selP.selectedIndex = 1;
+      await mondayLoadGroups(selP.value, null);
+    } else {
+      setStatus('ok', `${boards.length} boards`);
+    }
+  } catch(e) { setStatus('err', e.message); selP.disabled = false; console.error(e); }
+}
+
+async function mondayLoadGroups(boardId, savedGroup) {
+  if (!boardId) return;
+  setStatus('spin', 'Loading groups…');
+  const selS = document.getElementById('sel-sprint');
+  selS.innerHTML = '<option value="">loading…</option>'; selS.disabled = true;
+  try {
+    const d = await mondayFetch(`{
+      boards(ids: [${boardId}]) {
+        groups {
+          id
+          title
+        }
+      }
+    }`);
+    const groups = d.data?.boards?.[0]?.groups || [];
+    selS.innerHTML = '<option value="">— all groups —</option>';
+    groups.forEach(g => {
+      const o = document.createElement('option');
+      o.value = g.id; o.textContent = g.title;
+      if (g.id === savedGroup) o.selected = true;
+      selS.appendChild(o);
+    });
+    selS.disabled = false;
+    selS.onchange = () => mondaySyncBoard();
+    if (savedGroup && selS.value === savedGroup) {
+      await mondaySyncBoard();
+    } else if (groups.length > 0) {
+      selS.selectedIndex = 1;
+      await mondaySyncBoard();
+    } else {
+      setStatus('ok', `${groups.length} groups`);
+    }
+  } catch(e) { setStatus('err', e.message); selS.disabled = false; console.error(e); }
+}
+
+async function mondaySyncBoard() {
+  saveSelections();
+  const boardId   = document.getElementById('sel-proj').value;
+  const groupId   = document.getElementById('sel-sprint').value;
+  const groupLabel = document.getElementById('sel-sprint').selectedOptions[0]?.textContent || 'all';
+  if (!boardId) { setStatus('err', 'Select a board'); return; }
+
+  setStatus('spin', 'Querying Monday.com…');
+  document.getElementById('btn-sync').disabled = true;
+
+  try {
+    // fetch items with column values — filter by group via cursor-based items_page
+    // Monday v2: use query_params rules to filter by group
+    const groupRule = groupId
+      ? `, query_params: { rules: [{ column_id: "group", compare_value: ["${groupId}"] }] }`
+      : '';
+
+    const d = await mondayFetch(`{
+      boards(ids: [${boardId}]) {
+        items_page(limit: 200${groupRule}) {
+          items {
+            id
+            name
+            group { id title }
+            column_values {
+              id
+              text
+              type
+            }
+          }
+        }
+      }
+    }`);
+
+    const items = d.data?.boards?.[0]?.items_page?.items || [];
+
+    // find "done" items — any status column whose text matches done labels
+    const DONE = new Set(['done','completed','complete','closed','resolved','finished','fixed']);
+    const doneItems = items.filter(item =>
+      item.column_values.some(col =>
+        col.type === 'color' && DONE.has((col.text || '').toLowerCase().trim())
+      )
+    );
+
+    if (!doneItems.length) {
+      setStatus('ok', 'No done items found — check your status column labels');
+      document.getElementById('btn-sync').disabled = false;
+      return;
+    }
+
+    const freshSeeds = doneItems.map(item => {
+      // priority from a priority/numbers column
+      let priority = 'medium';
+      const priCol = item.column_values.find(c =>
+        c.id === 'priority' || c.id?.includes('prior') || c.type === 'priority'
+      );
+      if (priCol) {
+        const pt = (priCol.text || '').toLowerCase();
+        if (pt.includes('critical') || pt.includes('blocker')) priority = 'critical';
+        else if (pt.includes('high')) priority = 'high';
+        else if (pt.includes('low')) priority = 'low';
+      }
+      // owner from people column
+      let owner = 'Unassigned';
+      const peopleCol = item.column_values.find(c => c.type === 'multiple-person' || c.type === 'person');
+      if (peopleCol && peopleCol.text) owner = peopleCol.text.split(',')[0].trim();
+
+      return {
+        id: parseInt(item.id),
+        title: item.name || '(untitled)',
+        type: 'task',
+        owner,
+        state: 'Done',
+        priority,
+        sprint: item.group?.title || '',
+        seed: parseInt(item.id),
+        planted: false
+      };
+    });
+
+    cancelPlanting();
+    const gkey = gardenKey();
+    const savedPlants = loadGarden(gkey);
+
+    if (savedPlants && savedPlants.length > 0) {
+      const plantedIds = new Set(savedPlants.map(p => p.id));
+      seeds = freshSeeds.map(s => ({ ...s, planted: plantedIds.has(s.id) }));
+      const seedMap = Object.fromEntries(freshSeeds.map(s => [s.id, s]));
+      planted = savedPlants.map(p => ({
+        ...(seedMap[p.id] || p),
+        x: p.x, y: p.y,
+        plantedAt: Date.now() - 10000,
+        planted: true
+      }));
+      const newCount = seeds.filter(s => !s.planted).length;
+      setStatus('ok', `🌿 garden restored · ${planted.length} planted · ${newCount} new`);
+      showClearBtn(gkey);
+    } else {
+      seeds = freshSeeds;
+      planted = [];
+      setStatus('ok', `${seeds.length} done items · ${groupLabel}`);
+      hideClearBtn();
+    }
+
+    buildTray();
+    document.getElementById('n-planted').textContent = planted.length;
+    updateDropHint();
+
+  } catch(e) { setStatus('err', e.message); console.error(e); }
+  document.getElementById('btn-sync').disabled = false;
+}
+
+// ── Load orgs ──
+async function loadOrgs(savedOrg, savedProj, savedSprint) {
+  document.getElementById('grp-org').style.display = 'flex';
+  setStatus('spin','Loading orgs…');
+  try {
+    const r = await adoFetch('https://app.vssps.visualstudio.com/_apis/accounts?api-version=7.0&memberId=me');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const sel = document.getElementById('sel-org');
+    sel.innerHTML = '<option value="">— select org —</option>';
+    (d.value||[]).forEach(a => {
+      const o = document.createElement('option');
+      o.value = `https://dev.azure.com/${a.accountName}`;
+      o.textContent = a.accountName;
+      if (o.value === savedOrg) o.selected = true;
+      sel.appendChild(o);
+    });
+    // cascade if org was restored
+    if (savedOrg && sel.value === savedOrg) {
+      await loadProjects(savedOrg, savedProj, savedSprint);
+    } else {
+      setStatus('ok', `${(d.value||[]).length} orgs`);
+    }
+  } catch(e) { setStatus('err', e.message); }
+}
+
+async function onOrgChange() {
+  saveSelections();
+  const org = document.getElementById('sel-org').value;
+  if (!org) return;
+  showAllControls();
+  await loadProjects(org, null, null);
+}
+
+async function loadProjects(org, savedProj, savedSprint) {
+  setStatus('spin','Loading projects…');
+  const sel = document.getElementById('sel-proj');
+  sel.innerHTML = '<option value="">loading…</option>'; sel.disabled = true;
+  showAllControls();
+  try {
+    const r = await adoFetch(`${org}/_apis/projects?api-version=7.0`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    sel.innerHTML = '<option value="">— select project —</option>';
+    (d.value||[]).forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.name; o.textContent = p.name;
+      if (p.name === savedProj) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.disabled = false;
+    // cascade: if there's a saved project use it, otherwise pick the first one
+    if (savedProj && sel.value === savedProj) {
+      await loadSprints(org, savedProj, savedSprint);
+    } else if (!savedProj && sel.options.length > 1) {
+      // auto-select first project
+      sel.selectedIndex = 1;
+      await loadSprints(org, sel.value, null);
+    } else {
+      setStatus('ok', `${(d.value||[]).length} projects`);
+    }
+  } catch(e) { setStatus('err', e.message); sel.disabled = false; }
+}
+
+async function onProjChange() {
+  saveSelections();
+  const org = getOrg(), proj = document.getElementById('sel-proj').value;
+  if (!proj) return;
+  showAllControls();
+  if (sessionType === 'monday') { await mondayLoadGroups(proj, null); return; }
+  if (!org) return;
+  await loadSprints(org, proj, null);
+}
+
+async function loadSprints(org, proj, savedSprint) {
+  setStatus('spin','Loading sprints…');
+  const sel = document.getElementById('sel-sprint');
+  sel.innerHTML = '<option value="">loading…</option>'; sel.disabled = true;
+  try {
+    let r = await adoFetch(`${org}/${encodeURIComponent(proj)}/_apis/work/teamsettings/iterations?api-version=7.0`);
+    if (!r.ok) r = await adoFetch(`${org}/${proj}/_apis/work/teamsettings/iterations?api-version=7.0`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const its = [...(d.value||[])].sort((a,b) => {
+      if (a.attributes?.timeFrame==='current') return -1;
+      if (b.attributes?.timeFrame==='current') return 1;
+      return (b.attributes?.startDate||'').localeCompare(a.attributes?.startDate||'');
+    });
+    sel.innerHTML = '<option value="">— all closed —</option>';
+    its.forEach(it => {
+      const o = document.createElement('option');
+      o.value = it.path; o.textContent = it.name+(it.attributes?.timeFrame==='current'?' ←':'');
+      if (it.path === savedSprint) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.disabled = false;
+    setStatus('ok', `${its.length} sprints · ready to sync`);
+    // auto-sync saved sprint, or default to first sprint in list
+    if (savedSprint) {
+      await syncSprint();
+    } else if (its.length > 0) {
+      sel.selectedIndex = 1; // first sprint (current is sorted to top)
+      await syncSprint();
+    }
+    sel.onchange = () => syncSprint();
+  } catch(e) { setStatus('err', e.message); sel.disabled = false; }
+}
+
+function getOrg() { return document.getElementById('sel-org').value || patMode.org || ''; }
+
+async function syncSprint() {
+  saveSelections();
+  const org = getOrg();
+  const proj = document.getElementById('sel-proj').value;
+  const sprint = document.getElementById('sel-sprint').value;
+  const sprintLabel = document.getElementById('sel-sprint').selectedOptions[0]?.textContent||'all';
+  if (!org||!proj) { setStatus('err','Select org + project'); return; }
+
+  setStatus('spin','Querying…');
+  document.getElementById('btn-sync').disabled = true;
+
+  try {
+    const ic = sprint ? `AND [System.IterationPath]='${sprint}'` : '';
+    const wiql = { query:`SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject]='${proj}' AND [System.State] IN ('Closed','Done','Resolved') ${ic} ORDER BY [System.ChangedDate] DESC` };
+    const wr = await adoFetch(`${org}/${proj}/_apis/wit/wiql?api-version=7.0`, { method:'POST', body:JSON.stringify(wiql) });
+    if (!wr.ok) throw new Error(`WIQL ${wr.status}: ${await wr.text()}`);
+    const wd = await wr.json();
+    const ids = (wd.workItems||[]).slice(0,100).map(w=>w.id);
+    if (!ids.length) { setStatus('ok','No closed items found'); document.getElementById('btn-sync').disabled=false; return; }
+
+    setStatus('spin',`Loading ${ids.length} items…`);
+    const fields = 'System.Id,System.Title,System.WorkItemType,Microsoft.VSTS.Common.Priority,System.State,System.IterationPath,System.AssignedTo';
+    const dr = await adoFetch(`${org}/_apis/wit/workitems?ids=${ids.join(',')}&fields=${fields}&api-version=7.0`);
+    if (!dr.ok) throw new Error(`Details ${dr.status}`);
+    const dd = await dr.json();
+
+    const TM = {'user story':'story','bug':'bug','epic':'epic','feature':'feature','task':'task','test case':'test','test plan':'test','issue':'bug'};
+    const PM = {1:'critical',2:'high',3:'medium',4:'low'};
+    const freshSeeds = (dd.value||[]).map(item => {
+      const f = item.fields;
+      const rawT = (f['System.WorkItemType']||'Task').toLowerCase();
+      let type = 'task'; for (const[k,v] of Object.entries(TM)) if(rawT.includes(k)){type=v;break;}
+      const at = f['System.AssignedTo'];
+      let owner = 'Unassigned';
+      if (at){ if(typeof at==='object'&&at.displayName) owner=at.displayName;
+        else if(typeof at==='string') owner=at.replace(/<[^>]+>/g,'').trim()||'Unassigned'; }
+      return { id:item.id, title:f['System.Title']||'(untitled)', type, owner,
+        state:f['System.State']||'', priority:PM[f['Microsoft.VSTS.Common.Priority']]||'medium',
+        sprint:f['System.IterationPath']||'', seed:item.id, planted:false };
+    });
+
+    cancelPlanting();
+
+    // ── restore saved garden ──
+    const gkey = gardenKey();
+    const savedPlants = loadGarden(gkey);
+
+    if (savedPlants && savedPlants.length > 0) {
+      // mark seeds as planted if they exist in the saved garden
+      const plantedIds = new Set(savedPlants.map(p => p.id));
+      seeds = freshSeeds.map(s => ({ ...s, planted: plantedIds.has(s.id) }));
+      // restore planted with their saved positions — use fresh seed data for title/owner etc
+      const seedMap = Object.fromEntries(freshSeeds.map(s => [s.id, s]));
+      planted = savedPlants.map(p => ({
+        ...(seedMap[p.id] || p),
+        x: p.x, y: p.y,
+        // set plantedAt to 10s ago so they appear fully grown immediately
+        plantedAt: Date.now() - 10000,
+        planted: true
+      }));
+      // any new seeds since last save appear as unplanted
+      const newCount = seeds.filter(s => !s.planted).length;
+      const lbl = sprint ? `"${sprintLabel.split(' ←')[0]}"` : 'all';
+      setStatus('ok', `🌿 garden restored · ${planted.length} planted · ${newCount} new`);
+      showClearBtn(gkey);
+    } else {
+      seeds = freshSeeds;
+      planted = [];
+      const lbl = sprint ? `"${sprintLabel.split(' ←')[0]}"` : 'all';
+      setStatus('ok', `${seeds.length} seeds · ${lbl}`);
+      hideClearBtn();
+    }
+
+    buildTray();
+    document.getElementById('n-planted').textContent = planted.length;
+    updateDropHint();
+
+  } catch(e) { setStatus('err', e.message); console.error(e); }
+  document.getElementById('btn-sync').disabled = false;
+}
 
 function updateDropHint() {
   document.getElementById('drop-hint').style.display = planted.length === 0 ? 'block' : 'none';
@@ -842,7 +1472,11 @@ function setStatus(s,t) {
 // GARDEN PERSISTENCE
 // ══════════════════════════════════════
 function gardenKey() {
-  return `tg_garden::todo::${tdGardenId}`;
+  if (sessionType === 'todo') return `tg_garden::todo::${tdProjId}::${tdSprintId}`;
+  const org    = getOrg();
+  const proj   = document.getElementById('sel-proj').value;
+  const sprint = document.getElementById('sel-sprint').value || '__all__';
+  return `tg_garden::${org}::${proj}::${sprint}`;
 }
 
 function saveGarden() {
@@ -1284,12 +1918,12 @@ function drawPlant(p) {
 
   ctx.restore(); // end p.x,p.y
 
-  // label (task title)
+  // label (task title for todo mode, owner name for azure/monday)
   const lblStart = grassStart + numBlades*0.06 + 0.1;
   if (elapsed > lblStart) {
     const lop = Math.min(1,(elapsed-lblStart)/0.15);
     const fs = Math.max(7, Math.min(10, cv.width*0.007/cam.zoom));
-    const label = p.title;
+    const label = sessionType === 'todo' ? p.title : shortN(p.owner);
     if (label) {
       ctx.save();
       ctx.globalAlpha = lop*0.62;
@@ -1393,18 +2027,17 @@ function drawHoldRing() {
   if (!holdState) return;
   const prog = uprooting();
 
-  // fire uproot the instant ring completes — enter tooltip drag mode
+  // fire uproot the instant ring completes — don't wait for mouseup
   if (prog >= 1 && !holdState.fired) {
     holdState.fired = true;
     holdState.uprooted = true;
     const p = holdState.plant;
-    const screenPos = worldToScreen(p.x, p.y);
     uprootPlant(p);
-    // enter tooltip drag mode (reuse the same flow as task card → canvas)
-    _uprootDrag = { seedId: p.id, startScreenX: screenPos.x, startScreenY: screenPos.y };
-    _uprootDragTip = null;
     holdState = null;
-    cv.style.cursor = 'grabbing';
+    cv.style.cursor = 'grab';
+    // show unplant zone so user can drag flower back to list
+    const uz = document.getElementById('tray-unplant-zone');
+    if (uz) uz.classList.add('visible');
     return;
   }
 
@@ -1453,11 +2086,9 @@ function drawHoldRing() {
 }
 
 // ── pan + hold mouse events ──
-// After hold ring completes, enter tooltip drag mode
-let _uprootDrag = null;        // { seedId } — active uproot drag
-let _uprootDragTip = null;     // tooltip DOM element during uproot drag
-let _uprootPlaceholder = null; // placeholder gap in task list
-let _uprootCard = null;        // hidden task card in list
+// After hold ring completes, enter "moving" mode: the flower follows the cursor
+// and can be dropped on canvas (re-plant) or on the tray (unplant)
+let _movingPlant = null;  // plant being repositioned after hold
 
 cv.addEventListener('mousedown', e => {
   if (selectedSeed) return;
@@ -1475,42 +2106,24 @@ cv.addEventListener('mousedown', e => {
 });
 
 document.addEventListener('mouseup', e => {
-  if (_uprootDrag) {
-    // clean up tooltip
-    if (_uprootDragTip && _uprootDragTip.parentNode) _uprootDragTip.parentNode.removeChild(_uprootDragTip);
-    _uprootDragTip = null;
-    _tdDragPreview = null;
-    const tray = document.querySelector('.tray');
+  if (_movingPlant) {
+    const lbl = document.getElementById('move-flower-label');
+    if (lbl) lbl.style.display = 'none';
+    document.querySelectorAll('.moving-ghost').forEach(el => el.classList.remove('moving-ghost'));
+    const tray = document.getElementById('tray');
+    const uz   = document.getElementById('tray-unplant-zone');
+    if (uz) uz.classList.remove('visible','hover');
     const trayRect = tray?.getBoundingClientRect();
-    const overTray = trayRect && e.clientX >= trayRect.left && e.clientX <= trayRect.right &&
-                     e.clientY >= trayRect.top  && e.clientY <= trayRect.bottom;
-    if (overTray) {
-      // dropped on tray → show card at placeholder position, save order
-      if (_uprootCard && _uprootPlaceholder && _uprootPlaceholder.parentNode) {
-        _uprootPlaceholder.parentNode.insertBefore(_uprootCard, _uprootPlaceholder);
-        _uprootCard.style.display = '';
-      }
-      // read new order from DOM
-      const scroll = document.getElementById('tray-scroll');
-      const garden = tdGetGarden();
-      if (scroll && garden) {
-        const newOrder = [...scroll.querySelectorAll('.todo-task[data-tid]')].map(c => c.dataset.tid);
-        const undone = garden.tasks.filter(t => !t.done);
-        const done = garden.tasks.filter(t => t.done);
-        const reordered = newOrder.map(id => undone.find(t => t.id === id)).filter(Boolean);
-        garden.tasks = [...reordered, ...done];
-        tdSave();
-      }
-      if (_uprootPlaceholder?.parentNode) _uprootPlaceholder.parentNode.removeChild(_uprootPlaceholder);
-      _uprootPlaceholder = null; _uprootCard = null; _uprootDrag = null;
+    if (trayRect && e.clientX >= trayRect.left && e.clientX <= trayRect.right &&
+        e.clientY >= trayRect.top  && e.clientY <= trayRect.bottom) {
+      // dropped on tray → unplant (don't re-plant)
+      _movingPlant = null;
       cancelPlanting();
     } else {
-      // dropped on canvas → replant at new position
-      if (_uprootPlaceholder?.parentNode) _uprootPlaceholder.parentNode.removeChild(_uprootPlaceholder);
-      if (_uprootCard?.parentNode) _uprootCard.parentNode.removeChild(_uprootCard);
-      _uprootPlaceholder = null; _uprootCard = null; _uprootDrag = null;
+      // dropped on canvas → re-plant at current mouse world pos
       const w = screenToWorld(e.clientX, e.clientY);
       plantAt(w.x, w.y);
+      _movingPlant = null;
     }
     cv.style.cursor = 'grab';
     return;
@@ -1518,69 +2131,40 @@ document.addEventListener('mouseup', e => {
   if (holdState) {
     holdState = null;
     cv.style.cursor = 'grab';
+    const uz = document.getElementById('tray-unplant-zone');
+    if (uz) uz.classList.remove('visible','hover');
     return;
   }
   if (isPanning) { isPanning = false; cv.style.cursor = 'grab'; }
 });
 
 document.addEventListener('mousemove', e => {
-  if (_uprootDrag) {
-    // create tooltip on first move
-    if (!_uprootDragTip) {
-      const seed = seeds.find(s => s.id === _uprootDrag.seedId);
-      if (seed) {
-        const garden = tdGetGarden();
-        const task = garden?.tasks.find(t => t.id === seed.id);
-        const _tc = task ? tdTaskColor(task) : null;
-        const _dotCss = _tc
-          ? `display:inline-block;width:9px;height:9px;border-radius:50%;background:${_tc};flex-shrink:0`
-          : `display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--border2);flex-shrink:0`;
-        _uprootDragTip = document.createElement('div');
-        _uprootDragTip.className = 'tt on';
-        _uprootDragTip.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem">
-          <span style="${_dotCss}"></span>
-          <span class="ttl" style="margin:0">${seed.title}</span>
-          <span style="font-size:0.48rem;color:var(--faint);flex-shrink:0">${task?.size||'medium'}</span>
-        </div>`;
-        document.body.appendChild(_uprootDragTip);
-      }
+  if (_movingPlant) {
+    const w = screenToWorld(e.clientX, e.clientY);
+    mouseX = w.x; mouseY = w.y;
+    // show floating label near cursor
+    const lbl = document.getElementById('move-flower-label');
+    if (lbl) {
+      lbl.textContent = '🌱 ' + (_movingPlant.title?.length > 22 ? _movingPlant.title.slice(0,22)+'…' : (_movingPlant.title||''));
+      lbl.style.left = (e.clientX + 14) + 'px';
+      lbl.style.top  = (e.clientY - 36) + 'px';
+      lbl.style.display = 'block';
     }
-    if (_uprootDragTip) {
-      _uprootDragTip.style.left = (e.clientX + 14) + 'px';
-      _uprootDragTip.style.top = (e.clientY + 16) + 'px';
-    }
-    // check if over canvas or tray
-    const cvRect = cv.getBoundingClientRect();
-    const overCanvas = e.clientX >= cvRect.left && e.clientX <= cvRect.right &&
-                       e.clientY >= cvRect.top && e.clientY <= cvRect.bottom;
-    if (overCanvas) {
-      const w = screenToWorld(e.clientX, e.clientY);
-      const seed = seeds.find(s => s.id === _uprootDrag.seedId);
-      if (seed) _tdDragPreview = { seed, x: w.x, y: w.y };
-      mouseX = w.x; mouseY = w.y;
-    } else {
-      _tdDragPreview = null;
-      // move placeholder to closest position in list
-      if (_uprootPlaceholder) {
-        const scroll = document.getElementById('tray-scroll');
-        const cards = [...scroll.querySelectorAll('.todo-task:not([style*="display: none"])')];
-        let closest = null, closestDist = Infinity;
-        cards.forEach(c => {
-          const r = c.getBoundingClientRect();
-          const mid = r.top + r.height / 2;
-          const dist = Math.abs(e.clientY - mid);
-          if (dist < closestDist) { closestDist = dist; closest = c; }
-        });
-        if (closest) {
-          const cr = closest.getBoundingClientRect();
-          const before = e.clientY < cr.top + cr.height / 2;
-          if (before) scroll.insertBefore(_uprootPlaceholder, closest);
-          else scroll.insertBefore(_uprootPlaceholder, closest.nextSibling);
-        }
-      }
-    }
+    // highlight tray if cursor is over it
+    const tray = document.getElementById('tray');
+    const uz   = document.getElementById('tray-unplant-zone');
+    const trayRect = tray?.getBoundingClientRect();
+    const overTray = trayRect && e.clientX >= trayRect.left && e.clientX <= trayRect.right &&
+                     e.clientY >= trayRect.top  && e.clientY <= trayRect.bottom;
+    if (uz) uz.classList.toggle('hover', overTray);
+    // hide the card in the list while moving (show as ghost)
+    const movingCard = document.querySelector(`.todo-task[data-tid="${_movingPlant.id}"]`);
+    if (movingCard) movingCard.classList.add('moving-ghost');
     return;
   }
+  // hide move label when not moving
+  const lbl = document.getElementById('move-flower-label');
+  if (lbl && lbl.style.display !== 'none' && !_movingPlant) lbl.style.display = 'none';
   if (holdState) {
     const dx = e.clientX - holdState.screenX, dy = e.clientY - holdState.screenY;
     // slight movement while holding is fine — only cancel if large (accidental pan)
@@ -1609,30 +2193,50 @@ function uprootPlant(p) {
   saveGarden();
   spawnConfetti(p.x, p.y);
 
-  // mark task undone so it becomes a seed
-  const garden = tdGetGarden();
-  if (garden) {
-    const task = garden.tasks.find(t => t.id === p.id);
-    if (task) { task.done = false; tdSave(); }
+  if (sessionType === 'todo') {
+    const sprint = tdGetSprint();
+    if (sprint) {
+      const task = sprint.tasks.find(t => t.id === p.id);
+      if (task) { task.done = false; tdSave(); }
+    }
+    tdApplySprint(); // rebuilds seeds[], calls buildTray, calls cancelPlanting
+    const cardEl  = document.querySelector(`.todo-task[data-tid="${p.id}"]`);
+    const plantSeed = seeds.find(s => s.id === p.id);
+    if (plantSeed) {
+      // Enter planting mode — user can now click canvas to re-place or release on tray
+      selectedSeed = plantSeed;
+      _movingPlant = plantSeed;
+      if (cardEl) cardEl.classList.add('selected');
+      document.getElementById('garden').classList.add('planting');
+      document.getElementById('plant-banner').classList.add('on');
+      document.getElementById('banner-dot').style.background = ownerColor(plantSeed.owner);
+      document.getElementById('banner-txt').textContent = `moving: ${plantSeed.title.substring(0,26)}${plantSeed.title.length>26?'…':''}`;
+      seedCursor.classList.add('on', 'pulse');
+      seedCursor.style.left = mouseX + 'px';
+      seedCursor.style.top  = mouseY + 'px';
+    }
+  } else {
+    const seed = seeds.find(s => s.id === p.id);
+    if (seed) seed.planted = false;
+    document.getElementById('n-planted').textContent = planted.length;
+    updateDropHint();
+    buildTray();
+    const seedEl = document.querySelector(`.seed[data-sid="${p.id}"]`);
+    if (seed) {
+      selectedSeed = seed;
+      _movingPlant = seed;
+      if (seedEl) seedEl.classList.add('selected');
+      document.getElementById('garden').classList.add('planting');
+      document.getElementById('plant-banner').classList.add('on');
+      const _seedCol = seed.color ? (()=>{ const c=TD_COLORS?.find(c=>c.id===seed.color); return c?.hex||null; })() : null;
+  document.getElementById('banner-dot').style.background = _seedCol || ownerColor(seed.owner);
+      document.getElementById('banner-txt').textContent = `moving: ${seed.title.substring(0,26)}`;
+      seedCursor.classList.add('on', 'pulse');
+    }
   }
-  // rebuild tray so seeds array and DOM card exist
-  tdApplyGarden();
-  // set selectedSeed so plantAt works if user drops on canvas
-  selectedSeed = seeds.find(s => s.id === p.id) || null;
-
-  // immediately hide the card and show a placeholder gap
-  const scroll = document.getElementById('tray-scroll');
-  const card = scroll?.querySelector(`.todo-task[data-tid="${p.id}"]`);
-  if (card) {
-    const rect = card.getBoundingClientRect();
-    const ph = document.createElement('div');
-    ph.className = 'todo-task-placeholder';
-    ph.style.height = rect.height + 'px';
-    card.parentNode.insertBefore(ph, card);
-    card.style.display = 'none';
-    _uprootPlaceholder = ph;
-    _uprootCard = card;
-  }
+  // Show unplant drop zone
+  const uz = document.getElementById('tray-unplant-zone');
+  if (uz) uz.classList.add('visible');
 }
 
 // ── zoom scroll removed — pan only ──
@@ -1668,7 +2272,41 @@ cv.addEventListener('click', e => {
 let _tdDraggingId   = null;  // id of task currently being dragged
 let _tdDragPreview  = null;  // { seed, x, y } world-space preview while dragging over canvas
 
-// Canvas drag-to-plant is handled by pointer events in buildTray() task cards
+cv.addEventListener('dragenter', e => {
+  if (!e.dataTransfer.types.includes('text/td-task-id')) return;
+  e.preventDefault();
+});
+cv.addEventListener('dragover', e => {
+  if (!e.dataTransfer.types.includes('text/td-task-id')) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const w = screenToWorld(e.clientX, e.clientY);
+  mouseX = w.x; mouseY = w.y;
+  // maintain preview object so draw loop can show glow
+  if (_tdDraggingId) {
+    const seed = seeds.find(s => s.id === _tdDraggingId);
+    if (seed) _tdDragPreview = { seed, x: w.x, y: w.y };
+  }
+});
+cv.addEventListener('dragleave', e => {
+  // dragleave fires when moving between child elements — only clear if truly leaving canvas
+  if (cv.contains(e.relatedTarget)) return;
+  _tdDragPreview = null;
+  mouseX = -999; mouseY = -999;
+});
+cv.addEventListener('drop', e => {
+  _tdDragPreview = null;
+  _tdDraggingId = null;
+  const taskId = e.dataTransfer.getData('text/td-task-id');
+  if (!taskId) return;
+  e.preventDefault();
+  const seed = seeds.find(s => s.id === taskId);
+  if (!seed) return;
+  selectedSeed = seed;  // set right before plantAt — will be cleared inside it
+  const w = screenToWorld(e.clientX, e.clientY);
+  plantAt(w.x, w.y);
+  cv.style.cursor = 'grab';
+});
 
 
 // ── Tooltip + hover wiggle ──
@@ -1730,35 +2368,58 @@ function plantAt(x, y) {
   spawnConfetti(x, y);
   playPlantSound();
 
-  // Mark the task as done + play complete animation
-  const garden = tdGetGarden();
-  if (garden) {
-    const task = garden.tasks.find(t => t.id === selectedSeed.id);
-    if (task) {
-      task.done = true; tdSave();
-      const taskId = selectedSeed.id;
-      cancelPlanting();
-      saveGarden(); updateDropHint();
-      const card = document.querySelector(`.todo-task[data-tid="${taskId}"]`);
-      if (card) {
-        card.classList.add('td-completing');
-        const rect = card.getBoundingClientRect();
-        const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
-        for (let i=0; i<8; i++) spawnConfettiScreen(cx + (Math.random()-0.5)*rect.width*0.8, cy + (Math.random()-0.5)*rect.height*0.8);
-        setTimeout(() => { buildTray(); }, 560);
-      } else {
-        buildTray();
+  // In todo mode: mark the task as done in data + play complete animation
+  if (sessionType === 'todo') {
+    const sprint = tdGetSprint();
+    if (sprint) {
+      const task = sprint.tasks.find(t => t.id === selectedSeed.id);
+      if (task) {
+        task.done = true; tdSave();
+        const taskId = selectedSeed.id;
+        // MUST cancel planting now so selectedSeed is cleared
+        cancelPlanting();
+        saveGarden(); showClearBtn(gardenKey()); updateDropHint();
+        // animate card out then rebuild tray
+        const card = document.querySelector(`.todo-task[data-tid="${taskId}"]`);
+        if (card) {
+          card.classList.add('td-completing');
+          const rect = card.getBoundingClientRect();
+          const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+          for (let i=0; i<8; i++) spawnConfettiScreen(cx + (Math.random()-0.5)*rect.width*0.8, cy + (Math.random()-0.5)*rect.height*0.8);
+          setTimeout(() => { buildTray(); }, 560);
+        } else {
+          buildTray();
+        }
+        return;
       }
-      return;
     }
   }
 
   cancelPlanting();
   saveGarden();
   buildTray();
+  showClearBtn(gardenKey());
   updateDropHint();
 }
 
+function showClearBtn(key) {
+  if (hasSavedGarden(key)) document.getElementById('btn-clear-garden').style.display = 'inline-flex';
+}
+function hideClearBtn() {
+  document.getElementById('btn-clear-garden').style.display = 'none';
+}
+function confirmClearGarden() {
+  if (!confirm('Clear the saved garden for this sprint? All plant positions will be lost.')) return;
+  const key = gardenKey();
+  clearGarden(key);
+  planted = [];
+  seeds.forEach(s => s.planted = false);
+  buildTray();
+  document.getElementById('n-planted').textContent = 0;
+  hideClearBtn();
+  setStatus('ok', 'Garden cleared');
+  updateDropHint();
+}
 function selectSeed(seed, el) {
   if (seed.planted) return;
   if (selectedSeed === seed) { cancelPlanting(); return; }
@@ -1784,11 +2445,6 @@ function clearSeedSelection() {
   });
 }
 
-// Close garden dropdown when clicking outside
-document.addEventListener('click', e => {
-  if (!e.target.closest('#tray-garden-section')) tdCloseGardenDropdown();
-}, true);
-
 // Close expanded task card when clicking outside
 document.addEventListener('click', e => {
   if (_tdExpandedId && !e.target.closest('.todo-task')) {
@@ -1799,13 +2455,7 @@ document.addEventListener('click', e => {
 
 function cancelPlanting() {
   selectedSeed  = null;
-  _uprootDrag   = null;
-  if (_uprootDragTip && _uprootDragTip.parentNode) _uprootDragTip.parentNode.removeChild(_uprootDragTip);
-  _uprootDragTip = null;
-  if (_uprootPlaceholder?.parentNode) _uprootPlaceholder.parentNode.removeChild(_uprootPlaceholder);
-  if (_uprootCard) _uprootCard.style.display = '';
-  _uprootPlaceholder = null; _uprootCard = null;
-  _tdDragPreview = null;
+  _movingPlant  = null;
   clearSeedSelection();
   document.getElementById('garden').classList.remove('planting');
   document.getElementById('plant-banner').classList.remove('on');
@@ -1813,9 +2463,32 @@ function cancelPlanting() {
   seedCursor.classList.remove('pulse');
   mouseX = -999; mouseY = -999;
   cv.style.cursor = 'grab';
+  const uz = document.getElementById('tray-unplant-zone');
+  if (uz) uz.classList.remove('visible','hover');
   updateDropHint();
 }
 
+// Unplant zone: if user has a selectedSeed (from uprooting) and releases mouse over tray, just cancel planting (flower already removed, task back in list)
+(function() {
+  const tray = document.querySelector('.tray');
+  if (!tray) return;
+  tray.addEventListener('mousemove', e => {
+    const uz = document.getElementById('tray-unplant-zone');
+    if (!uz || !uz.classList.contains('visible')) return;
+    uz.classList.add('hover');
+  });
+  tray.addEventListener('mouseleave', e => {
+    const uz = document.getElementById('tray-unplant-zone');
+    if (uz) uz.classList.remove('hover');
+  });
+  tray.addEventListener('mouseup', e => {
+    const uz = document.getElementById('tray-unplant-zone');
+    if (uz && uz.classList.contains('visible') && selectedSeed) {
+      // user released over tray after uprooting — just cancel planting, task is already back in list
+      cancelPlanting();
+    }
+  });
+})();
 
 // Task color palette — affects flower color
 const TD_COLORS = [
@@ -1835,16 +2508,16 @@ function tdTaskColor(task) {
 }
 
 function tdSetTaskColor(taskId, colorId) {
-  const garden = tdGetGarden(); if (!garden) return;
-  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  const sprint = tdGetSprint(); if (!sprint) return;
+  const task = sprint.tasks.find(t => t.id === taskId); if (!task) return;
   task.color = colorId === 'default' ? null : colorId;
   const plant = planted.find(p => p.id === taskId);
   if (plant) { plant.color = task.color; saveGarden(); }
   tdSave(); buildTray();
 }
 function tdSetTaskSize(taskId, sizeId) {
-  const garden = tdGetGarden(); if (!garden) return;
-  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  const sprint = tdGetSprint(); if (!sprint) return;
+  const task = sprint.tasks.find(t => t.id === taskId); if (!task) return;
   task.size = sizeId;
   const plant = planted.find(p => p.id === taskId);
   if (plant) { plant.size = sizeId; saveGarden(); }
@@ -1854,31 +2527,32 @@ function tdSetTaskSize(taskId, sizeId) {
 }
 
 
-// ── Garden progress bar ──
+// ── Sprint progress ring ──
 function tdUpdateProgressRing() {
-  const garden = tdGetGarden();
-  const row = document.getElementById('tray-progress-row');
+  const sprint  = tdGetSprint();
+  const row     = document.getElementById('tray-progress-row');
   if (!row) return;
-  if (!garden || garden.tasks.length === 0) { row.style.display = 'none'; return; }
-  row.style.display = 'block';
+  if (!sprint || sprint.tasks.length === 0) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
 
-  const total = garden.tasks.length;
-  const done  = garden.tasks.filter(t => t.done).length;
-  const pct   = Math.round(done / total * 100);
+  const total   = sprint.tasks.length;
+  const done    = sprint.tasks.filter(t => t.done).length;
+  const pct     = Math.round(done / total * 100);
+  const circ    = 2 * Math.PI * 13; // r=13 → 81.68
+
+  const arc = document.getElementById('tray-ring-arc');
+  if (arc) arc.style.strokeDashoffset = circ * (1 - done / total);
 
   const pctEl = document.getElementById('tray-progress-pct');
   if (pctEl) pctEl.textContent = pct + '%';
 
   const todoChip = document.getElementById('prog-chip-todo');
   const doneChip = document.getElementById('prog-chip-done');
-  if (todoChip) todoChip.textContent = (total - done);
-  if (doneChip) doneChip.textContent = done;
+  if (todoChip) todoChip.textContent = (total - done) + ' left';
+  if (doneChip) doneChip.textContent = done + ' done';
 
-  const fill = document.getElementById('garden-progress-fill');
-  if (fill) {
-    fill.style.width = pct + '%';
-    fill.style.background = done === total ? '#5ec45e' : 'var(--accent)';
-  }
+  // color the arc green when all done
+  if (arc) arc.style.stroke = done === total ? '#5ec45e' : 'var(--accent)';
 }
 
 // ── Build tray ──
@@ -1886,26 +2560,29 @@ function buildTray() {
   const scroll = document.getElementById('tray-scroll');
   const addArea = document.getElementById('tray-add-area');
 
-  const garden = tdGetGarden();
+  if (sessionType === 'todo') {
+    const sprint = tdGetSprint();
 
     // Update tabs + add area visibility
     const foot = document.getElementById('tray-foot-todo');
-    if (foot) foot.style.display = garden ? 'flex' : 'none';
+    if (foot) foot.style.display = sprint ? 'flex' : 'none';
 
-    document.getElementById('tray-tabs').style.display = garden ? 'flex' : 'none';
-    addArea.style.display = (garden && _tdActiveTab === 'todo') ? 'flex' : 'none';
+    document.getElementById('tray-tabs').style.display = sprint ? 'flex' : 'none';
+    addArea.style.display = (sprint && _tdActiveTab === 'todo') ? 'flex' : 'none';
 
+    // collect existing card IDs before wiping DOM — used to detect truly new cards
+    const existingIds = new Set([...scroll.querySelectorAll('.todo-task[data-tid]')].map(e => e.dataset.tid));
     scroll.innerHTML = '';
 
-    if (!garden) {
-      scroll.innerHTML = '<div style="text-align:center;color:var(--faint);font-size:0.62rem;padding:2rem 0.5rem;line-height:2">Select a garden<br>to get started</div>';
+    if (!sprint) {
+      scroll.innerHTML = '<div style="text-align:center;color:var(--faint);font-size:0.62rem;padding:2rem 0.5rem;line-height:2">Create a project &amp; sprint<br>in the bar above</div>';
       const ns = document.getElementById('n-seeds'); if(ns) ns.textContent='0';
       const np = document.getElementById('n-planted'); if(np) np.textContent=planted.length;
       return;
     }
 
     if (_tdActiveTab === 'done') {
-      const doneTasks = garden.tasks.filter(t => t.done);
+      const doneTasks = sprint.tasks.filter(t => t.done);
       if (!doneTasks.length) {
         scroll.innerHTML = '<div style="text-align:center;color:var(--faint);font-size:0.62rem;padding:2rem 0.5rem;line-height:2">No done tasks yet —<br>plant a task to complete it</div>';
       } else {
@@ -1924,53 +2601,41 @@ function buildTray() {
     }
 
     // ── TODO TAB ──
-    const todoTasks = garden.tasks.filter(t => !t.done);
+    const todoTasks = sprint.tasks.filter(t => !t.done);
     if (!todoTasks.length) {
       scroll.innerHTML = '<div style="text-align:center;color:var(--faint);font-size:0.62rem;padding:2rem 0.5rem;line-height:2">All done! 🎉<br>Check the Done tab</div>';
     }
 
+    let dragSrcIdx = null;
+
     todoTasks.forEach((task, i) => {
       const isSelected  = selectedSeed?.id === task.id;
-      const isNew       = _tdNewTaskIds.has(task.id);
+      const isNew       = !existingIds.has(task.id);
       const taskColor   = tdTaskColor(task);
       const isExpanded  = _tdExpandedId === task.id;
 
-      const isEditing = _tdEditingTaskId === task.id;
       const el = document.createElement('div');
       el.className = 'todo-task' + (isSelected ? ' selected' : '') + (isNew ? ' slide-in' : '');
-      if (isNew) {
-        el.style.animationDelay = (i * 0.04) + 's';
-        el.addEventListener('animationend', () => el.classList.remove('slide-in'), { once: true });
-      }
+      if (isNew) el.style.animationDelay = (i * 0.04) + 's';
       if (taskColor) el.style.setProperty('--task-accent', taskColor);
       el.dataset.tid  = task.id;
       el.dataset.tidx = i;
+      el.draggable    = true;
 
       // color dot (shows task color, default grey if none)
       const dotStyle = taskColor ? `background:${taskColor}` : 'background:var(--border2,#c8d4c0)';
-
-      // Title area: either editing input or static text
-      const titleHtml = isEditing
-        ? `<input id="td-edit-task-input" class="todo-task-title-input" value="${task.title.replace(/"/g,'&quot;')}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')tdConfirmEditTask('${task.id}');if(event.key==='Escape')tdCancelEditTask()"/>`
-        : `<div class="todo-task-title">${task.title}</div>`;
 
       el.innerHTML = `
         <div class="todo-task-row">
           <span class="todo-drag-handle">⠿</span>
           <div class="todo-color-dot" style="${dotStyle}"></div>
           <div style="flex:1;min-width:0">
-            ${titleHtml}
+            <div class="todo-task-title">${task.title}</div>
           </div>
-          ${isEditing ? `
-            <button class="tsh-btn" onclick="event.stopPropagation();tdConfirmEditTask('${task.id}')" style="color:var(--accent);font-size:0.75rem" title="Save">✓</button>
-            <button class="tsh-btn" onclick="event.stopPropagation();tdCancelEditTask()" title="Cancel">✕</button>
-          ` : `
-            <button class="todo-edit-icon" data-tid="${task.id}" title="Edit">✎</button>
-            <span class="todo-chevron" style="color:var(--faint);font-size:0.6rem;flex-shrink:0;transition:transform 0.18s;transform:rotate(${isExpanded?'90':'0'}deg);pointer-events:none">▶</span>
-            <button class="todo-del" title="Delete">✕</button>
-          `}
+          <span class="todo-chevron" style="color:var(--faint);font-size:0.6rem;flex-shrink:0;transition:transform 0.18s;transform:rotate(${isExpanded?'90':'0'}deg);pointer-events:none">▶</span>
+          <button class="todo-del" title="Delete">✕</button>
         </div>
-        ${isExpanded && !isEditing ? `
+        ${isExpanded ? `
         <div class="todo-expand">
           <div class="todo-expand-label">Flower color</div>
           <div class="todo-color-row">
@@ -1990,18 +2655,7 @@ function buildTray() {
           <button class="todo-plant-btn" data-tid="${task.id}">🌱 Plant</button>
         </div>` : ''}`;
 
-      // Focus edit input
-      if (isEditing) {
-        setTimeout(() => { const inp = document.getElementById('td-edit-task-input'); if(inp) { inp.focus(); inp.select(); } }, 50);
-      }
-
-      // edit icon in main row
-      if (!isEditing) {
-        const editIcon = el.querySelector('.todo-edit-icon');
-        if (editIcon) editIcon.addEventListener('click', e => { e.stopPropagation(); tdStartEditTask(task.id); });
-      }
-
-      if (isExpanded && !isEditing) {
+      if (isExpanded) {
         // size buttons
         el.querySelectorAll('.todo-size-btn').forEach(btn => {
           btn.addEventListener('click', e => {
@@ -2029,186 +2683,112 @@ function buildTray() {
         });
       });
 
-      // click card = expand/collapse (debounced to not fire on dblclick)
-      let _taskClickTimer = null;
+      // click card = expand/collapse
       el.addEventListener('click', e => {
-        if (isEditing || didDrag) return;
-        if (e.target.closest('.todo-del') || e.target.closest('.todo-color-swatch') || e.target.closest('.todo-plant-btn') || e.target.closest('.todo-size-btn') || e.target.closest('.todo-edit-icon')) return;
-        if (_taskClickTimer) { clearTimeout(_taskClickTimer); _taskClickTimer = null; return; }
-        _taskClickTimer = setTimeout(() => {
-          _taskClickTimer = null;
-          _tdExpandedId = (_tdExpandedId === task.id) ? null : task.id;
-          buildTray();
-        }, 220);
+        if (e.target.closest('.todo-del') || e.target.closest('.todo-color-swatch') || e.target.closest('.todo-plant-btn') || e.target.closest('.todo-size-btn')) return;
+        _tdExpandedId = (_tdExpandedId === task.id) ? null : task.id;
+        buildTray();
       });
 
-      // double-click card = edit title
-      el.addEventListener('dblclick', e => {
-        if (isEditing) return;
-        if (_taskClickTimer) { clearTimeout(_taskClickTimer); _taskClickTimer = null; }
-        e.stopPropagation();
-        tdStartEditTask(task.id);
+      el.querySelector('.todo-del').addEventListener('click', e => {
+        e.stopPropagation(); tdDeleteTask(task.id);
       });
 
-      if (!isEditing) {
-        el.querySelector('.todo-del')?.addEventListener('click', e => {
-          e.stopPropagation(); tdDeleteTask(task.id);
-        });
-      }
+      // drag start
+      el.addEventListener('dragstart', e => {
+        dragSrcIdx    = i;
+        _tdDraggingId = task.id;
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/td-task-id', task.id);
+        // sync latest task color onto seed so drop plants with correct color
+        const _ds = seeds.find(s => s.id === task.id);
+        if (_ds) { _ds.color = task.color || null; _ds.size = task.size || 'medium'; _ds.dueDate = task.dueDate || null; }
+        const ghost = document.getElementById('td-drag-ghost');
+        ghost.innerHTML = `🌱 ${task.title.length>24 ? task.title.slice(0,24)+'…' : task.title}`;
+        e.dataTransfer.setDragImage(ghost, ghost.offsetWidth/2, -18);
+      });
 
-      // pointer-based drag reorder (whole card) + drag-to-canvas planting
-      let pointerDown = false, startX = 0, startY = 0, didDrag = false;
-      let _placeholder = null, _origRect = null, _overCanvas = false, _dragTip = null;
-
-      function _cleanupDrag() {
+      el.addEventListener('dragend', () => {
         el.classList.remove('dragging');
-        el.style.cssText = '';
-        scroll.querySelectorAll('.slide-in').forEach(c => c.classList.remove('slide-in'));
-        if (_placeholder && _placeholder.parentNode) _placeholder.parentNode.removeChild(_placeholder);
-        if (_dragTip && _dragTip.parentNode) _dragTip.parentNode.removeChild(_dragTip);
-        _placeholder = null; _origRect = null; _overCanvas = false; _dragTip = null;
-        _tdDraggingId = null; _tdDragPreview = null;
-        cv.style.cursor = 'grab';
-        pointerDown = false; didDrag = false;
-      }
+        scroll.querySelectorAll('.todo-task').forEach(c => c.classList.remove('drag-above','drag-below'));
+        _tdDraggingId  = null;
+        _tdDragPreview = null;
+      });
 
-      el.addEventListener('pointerdown', e => {
-        if (isEditing || isExpanded || e.button !== 0) return;
-        if (e.target.closest('.todo-del') || e.target.closest('.todo-edit-icon')) return;
-        pointerDown = true; didDrag = false;
-        startX = e.clientX; startY = e.clientY;
-        el.setPointerCapture(e.pointerId);
+      // drag-over for reorder
+      el.addEventListener('dragover', e => {
+        if (!e.dataTransfer.types.includes('text/td-task-id')) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        if (dragSrcIdx === null || dragSrcIdx === i) return;
+        scroll.querySelectorAll('.todo-task').forEach(c => c.classList.remove('drag-above','drag-below'));
+        const rect = el.getBoundingClientRect();
+        el.classList.add(e.clientY < rect.top + rect.height/2 ? 'drag-above' : 'drag-below');
       });
-      el.addEventListener('pointermove', e => {
-        if (!pointerDown) return;
-        if (!didDrag && Math.abs(e.clientY - startY) < 8) return;
-        if (!didDrag) {
-          didDrag = true;
-          _tdDraggingId = task.id;
-          const _ds = seeds.find(s => s.id === task.id);
-          if (_ds) { _ds.color = task.color || null; _ds.size = task.size || 'medium'; _ds.dueDate = task.dueDate || null; }
-          _origRect = el.getBoundingClientRect();
-          // create placeholder gap
-          _placeholder = document.createElement('div');
-          _placeholder.className = 'todo-task-placeholder';
-          _placeholder.style.height = _origRect.height + 'px';
-          el.parentNode.insertBefore(_placeholder, el);
-          // float the card
-          el.classList.add('dragging');
-          el.classList.remove('slide-in');
-          el.style.width = _origRect.width + 'px';
-          el.style.left = _origRect.left + 'px';
-          el.style.top = _origRect.top + 'px';
-        }
-        // check if cursor is over canvas
-        const cvRect = cv.getBoundingClientRect();
-        _overCanvas = e.clientX >= cvRect.left && e.clientX <= cvRect.right &&
-                      e.clientY >= cvRect.top && e.clientY <= cvRect.bottom;
+      el.addEventListener('dragleave', e => {
+        if (!el.contains(e.relatedTarget)) el.classList.remove('drag-above','drag-below');
+      });
 
-        if (_overCanvas) {
-          // hide the full card, show a mini tooltip-style preview
-          el.style.display = 'none';
-          if (!_dragTip) {
-            const _tc = tdTaskColor(task);
-            const _dotCss = _tc
-              ? `display:inline-block;width:9px;height:9px;border-radius:50%;background:${_tc};flex-shrink:0`
-              : `display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--border2);flex-shrink:0`;
-            _dragTip = document.createElement('div');
-            _dragTip.className = 'tt on';
-            _dragTip.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem">
-              <span style="${_dotCss}"></span>
-              <span class="ttl" style="margin:0">${task.title}</span>
-              <span style="font-size:0.48rem;color:var(--faint);flex-shrink:0">${task.size||'medium'}</span>
-            </div>`;
-            document.body.appendChild(_dragTip);
-          }
-          _dragTip.style.left = (e.clientX + 14) + 'px';
-          _dragTip.style.top = (e.clientY + 16) + 'px';
-          // show canvas glow preview
-          const w = screenToWorld(e.clientX, e.clientY);
-          const seed = seeds.find(s => s.id === _tdDraggingId);
-          if (seed) _tdDragPreview = { seed, x: w.x, y: w.y };
-          mouseX = w.x; mouseY = w.y;
-        } else {
-          // back over tray — show full card, hide tip
-          if (_dragTip) { _dragTip.parentNode?.removeChild(_dragTip); _dragTip = null; }
-          el.style.display = '';
-          el.style.transform = 'scale(0.97)';
-          el.style.left = (_origRect.left + (e.clientX - startX)) + 'px';
-          el.style.top = (_origRect.top + (e.clientY - startY)) + 'px';
-          el.style.opacity = '0.92';
-          _tdDragPreview = null;
-          // move placeholder to closest position
-          const cards = [...scroll.querySelectorAll('.todo-task:not(.dragging)')];
-          let closest = null, closestDist = Infinity;
-          cards.forEach(c => {
-            const r = c.getBoundingClientRect();
-            const mid = r.top + r.height / 2;
-            const dist = Math.abs(e.clientY - mid);
-            if (dist < closestDist) { closestDist = dist; closest = c; }
-          });
-          if (closest && _placeholder) {
-            const cr = closest.getBoundingClientRect();
-            const before = e.clientY < cr.top + cr.height / 2;
-            if (before) scroll.insertBefore(_placeholder, closest);
-            else scroll.insertBefore(_placeholder, closest.nextSibling);
-          } else if (_placeholder && !closest) {
-            // no other cards — just keep placeholder where it is
-            scroll.appendChild(_placeholder);
-          }
-        }
-      });
-      el.addEventListener('pointerup', e => {
-        if (!pointerDown || !didDrag) { pointerDown = false; return; }
-        if (_overCanvas) {
-          // plant on canvas
-          const seed = seeds.find(s => s.id === task.id);
-          if (seed) {
-            selectedSeed = seed;
-            const w = screenToWorld(e.clientX, e.clientY);
-            _cleanupDrag();
-            plantAt(w.x, w.y);
-            return;
-          }
-        }
-        // reorder: put card where placeholder is
-        if (_placeholder && _placeholder.parentNode) {
-          _placeholder.parentNode.insertBefore(el, _placeholder);
-        }
-        // read new order from DOM
-        const newOrder = [...scroll.querySelectorAll('.todo-task[data-tid]')].map(c => c.dataset.tid);
-        const undone = garden.tasks.filter(t => !t.done);
-        const done = garden.tasks.filter(t => t.done);
-        const reordered = newOrder.map(id => undone.find(t => t.id === id)).filter(Boolean);
-        garden.tasks = [...reordered, ...done];
-        tdSave();
-        _cleanupDrag();
-      });
-      // safety: if pointer capture is lost, clean up
-      el.addEventListener('lostpointercapture', () => {
-        if (didDrag) {
-          if (_placeholder && _placeholder.parentNode) {
-            _placeholder.parentNode.insertBefore(el, _placeholder);
-          }
-          const newOrder = [...scroll.querySelectorAll('.todo-task[data-tid]')].map(c => c.dataset.tid);
-          const undone = garden.tasks.filter(t => !t.done);
-          const done = garden.tasks.filter(t => t.done);
-          const reordered = newOrder.map(id => undone.find(t => t.id === id)).filter(Boolean);
-          garden.tasks = [...reordered, ...done];
-          tdSave();
-          _cleanupDrag();
-        }
+      // drop = reorder
+      el.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation();
+        el.classList.remove('drag-above','drag-below');
+        const fromId = e.dataTransfer.getData('text/td-task-id');
+        if (!fromId || fromId === task.id) return;
+        const realFrom = sprint.tasks.findIndex(t => t.id === fromId);
+        const realTo   = sprint.tasks.findIndex(t => t.id === task.id);
+        if (realFrom===-1 || realTo===-1) return;
+        const [moved] = sprint.tasks.splice(realFrom, 1);
+        const rect = el.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height/2;
+        const newIdx = sprint.tasks.findIndex(t => t.id === task.id);
+        sprint.tasks.splice(after ? newIdx+1 : newIdx, 0, moved);
+        tdSave(); dragSrcIdx=null; _tdDraggingId=null;
+        cancelPlanting(); tdApplySprint();
       });
 
       scroll.appendChild(el);
     });
 
-    // clear new-task IDs after this build cycle (slide-in animation started)
-    if (_tdNewTaskIds.size) setTimeout(() => _tdNewTaskIds.clear(), 50);
-
     const ns3 = document.getElementById('n-seeds'); if(ns3) ns3.textContent = seeds.length;
     const np3 = document.getElementById('n-planted'); if(np3) np3.textContent = planted.length;
     tdUpdateProgressRing();
+    return;
+  }
+
+  // ── AZURE / MONDAY MODE ──
+  addArea.style.display = 'none';
+  document.getElementById('tray-tabs').style.display = 'none';
+  const head = document.querySelector('.tray-head');
+  if (head) {
+    head.firstChild.textContent = 'Seeds';
+    const badge = head.querySelector('.tray-n'); if (badge) badge.textContent = seeds.length;
+  }
+  document.getElementById('n-seeds').textContent = seeds.length;
+  scroll.innerHTML = '';
+  if (!seeds.length) {
+    scroll.innerHTML = '<div style="text-align:center;color:var(--faint);font-size:0.62rem;line-height:2;padding:1.5rem 0.5rem">Pick a sprint and sync</div>';
+    return;
+  }
+  seeds.forEach(s => {
+    const col = ownerColor(s.owner);
+    const el = document.createElement('div');
+    el.className = 'seed' + (s.planted?' planted':'');
+    el.dataset.sid = s.id;
+    el.innerHTML = `
+      <div class="seed-row">
+        <div class="seed-color" style="background:${col}"></div>
+        <span class="seed-id">#${s.id}</span>
+      </div>
+      <div class="seed-title">${s.title}</div>
+      <div class="seed-foot">
+        <div class="avsm" style="background:${col}">${initials(s.owner)}</div>
+        <span class="owner-nm">${shortN(s.owner)||'—'}</span>
+        <span class="seed-type">${s.type}</span>
+      </div>`;
+    if (!s.planted) el.addEventListener('click', () => selectSeed(s, el));
+    scroll.appendChild(el);
+  });
 }
 
 
@@ -2405,16 +2985,7 @@ function playPlantSound() {
   } catch(e) {}
 }
 
-// ── Auto-restore or show login ──
-(function tryRestore() {
-  const session = loadSession();
-  if (session?.type === 'todo') {
-    sessionType = 'todo';
-    loginTodo();
-    return;
-  }
-  document.getElementById('login-screen').style.display = 'flex';
-})();
+startLoop();
 </script>
 </body>
 </html>
