@@ -1023,7 +1023,7 @@ cv.addEventListener('click', e => {
   }
 });
 
-// Pikuniku-style plant — order: stem → leaves → center → petals → grass
+// Flower design — order: stem → leaves → shadow → petals → head+face → grass → label
 function drawPlant(p) {
   const _taskCol = p.color ? (()=>{const c=TD_COLORS?.find(c=>c.id===p.color);return c?.hex||null;})() : null;
   const col     = _taskCol || ownerColor(p.owner);
@@ -1033,36 +1033,30 @@ function drawPlant(p) {
   if (elapsed <= 0.01) return;
 
   // Size controls stem length only — flower head stays same scale
-  // small=0.55, medium=1.0, large=1.7 of base stem height
   const STEM_SZ = { small: 0.55, medium: 1.0, large: 1.7 };
   const stemScale = STEM_SZ[p.size || 'medium'] || 1.0;
 
-  // maxH = full plant height (used for stem); headR derived from BASE not maxH
   const maxH    = BASE * (PH[p.priority]||0.54) * stemScale * (0.8 + rr()*0.4);
-  const headBase = BASE * 0.54 * (0.8 + rr()*0.4); // head always medium-scale
+  const headBase = BASE * 0.54 * (0.8 + rr()*0.4);
 
-  // Due date: fade out and disappear if overdue (grace: 24h after midnight of due date)
+  // Due date: fade out and disappear if overdue
   let dueFade = 1.0;
   if (p.dueDate) {
     const dueMs = new Date(p.dueDate + 'T23:59:59').getTime();
     const overMs = Date.now() - dueMs;
     if (overMs > 0) {
-      // fade over 24h then vanish
       const fadeDur = 24 * 3600 * 1000;
       dueFade = Math.max(0, 1 - overMs / fadeDur);
-      if (dueFade <= 0) return; // fully gone
+      if (dueFade <= 0) return;
     }
   }
 
-  const stemCol  = darken(col, 0.28);
-  const grassCol = '#52a832';
-  const grassDk  = '#3a7d22';
-  const stemW    = Math.max(1.5, headBase * 0.055);  // fixed width regardless of stem length
-  const headR    = headBase * 0.22;  // fixed size regardless of stem length
-  const petalR   = headR * 0.58;
+  const stemW    = Math.max(2, headBase * 0.045);
+  const headR    = headBase * 0.22;
+  const petalR   = headR * 0.50;
   const petalDist= headR * 0.88;
-  const np       = 6 + Math.floor(rr() * 3);
-  const numBlades= 5 + Math.floor(rr() * 4);
+  const np       = 8;
+  const numBlades= 3 + Math.floor(rr() * 2);
 
   const petalEnd   = 0.68 + np * 0.055;
   const grassStart = petalEnd + 0.06;
@@ -1073,10 +1067,8 @@ function drawPlant(p) {
   const ambientSway = Math.sin(T*(0.4+rr()*0.6)+(p.seed%100)) * 2.8*(Math.PI/180)
                       * Math.min(1, Math.max(0,(elapsed-0.55)*4));
 
-  // get chain skeleton points
   const pts = chainPoints(p, stemH, ambientSway);
   const tip = pts[pts.length - 1];
-  // flower lean = angle at tip segment
   const chain = getChain(p);
   const tipSeg = chain[chain.length - 1];
   const flowerLean = ambientSway + tipSeg.angle;
@@ -1085,131 +1077,149 @@ function drawPlant(p) {
   if (dueFade < 1) ctx.globalAlpha = dueFade;
   ctx.translate(p.x, p.y);
 
-  // ── 1. WAVY STEM — drawn as a ribbon following chain points ──
-  ctx.fillStyle = stemCol;
-  // build left and right edge by offsetting each point perpendicular to segment direction
-  const leftPts = [], rightPts = [];
-  for (let i = 0; i < pts.length; i++) {
-    const next = pts[Math.min(i+1, pts.length-1)];
-    const prev = pts[Math.max(i-1, 0)];
-    const dx = next.x - prev.x, dy = next.y - prev.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len; // perpendicular (normal)
-    const w = stemW * (1 - i / pts.length * 0.25); // slightly taper toward tip
-    leftPts.push({ x: pts[i].x + nx * w/2, y: pts[i].y + ny * w/2 });
-    rightPts.push({ x: pts[i].x - nx * w/2, y: pts[i].y - ny * w/2 });
-  }
-  // draw ribbon
+  // ── 1. STEM — simple colored line to tip ──
+  ctx.strokeStyle = col;
+  ctx.lineWidth = stemW;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(leftPts[0].x, leftPts[0].y);
-  for (let i = 1; i < leftPts.length; i++) {
-    const cp = leftPts[i-1];
-    ctx.quadraticCurveTo(cp.x, cp.y, (cp.x+leftPts[i].x)/2, (cp.y+leftPts[i].y)/2);
+  ctx.moveTo(pts[0].x, pts[0].y);
+  if (pts.length <= 2) {
+    ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+  } else {
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i+1].x) / 2;
+      const my = (pts[i].y + pts[i+1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
   }
-  ctx.lineTo(leftPts[leftPts.length-1].x, leftPts[leftPts.length-1].y);
-  ctx.lineTo(rightPts[rightPts.length-1].x, rightPts[rightPts.length-1].y);
-  for (let i = rightPts.length-2; i >= 0; i--) {
-    const cp = rightPts[i+1];
-    ctx.quadraticCurveTo(cp.x, cp.y, (cp.x+rightPts[i].x)/2, (cp.y+rightPts[i].y)/2);
-  }
-  ctx.closePath();
-  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
 
-  // ── 2. LEAVES — fixed size (headBase), position follows chain at 44% ──
+  // ── 2. LEAVES — task colored, at 75% down stem (near base) ──
   const leafProg = Math.max(0, Math.min(1, (elapsed-0.35)/0.2));
   if (leafProg > 0 && stemH > maxH*0.15) {
-    const lh = headBase*0.2, lw = headBase*0.09;
+    const lh = headBase*0.28, lw = headBase*0.12;
     const lsc = pop(leafProg);
-    const leafIdx = (pts.length-1) * 0.44;
+    const leafIdx = (pts.length-1) * 0.28; // 28% from tip = 72% from base
     const li = Math.floor(leafIdx), lf = leafIdx - li;
     const leafPt = {
       x: pts[li].x + (pts[li+1]?.x - pts[li].x || 0) * lf,
       y: pts[li].y + (pts[li+1]?.y - pts[li].y || 0) * lf
     };
     const leafAngle = chain[Math.min(li, chain.length-1)].angle + ambientSway;
-    ctx.fillStyle = grassCol;
-    ctx.save(); ctx.translate(leafPt.x - stemW*.5, leafPt.y); ctx.rotate(-0.55 + leafAngle*0.6); ctx.scale(lsc,lsc); pointyLeaf(lw,lh); ctx.restore();
-    ctx.save(); ctx.translate(leafPt.x + stemW*.5, leafPt.y - headBase*.07); ctx.rotate(0.55 + leafAngle*0.6); ctx.scale(lsc,lsc); pointyLeaf(lw,lh); ctx.restore();
+    ctx.fillStyle = col;
+    ctx.save(); ctx.translate(leafPt.x, leafPt.y); ctx.rotate(-1.0 + leafAngle*0.6); ctx.scale(lsc,lsc); pointyLeaf(lw,lh); ctx.restore();
+    ctx.save(); ctx.translate(leafPt.x, leafPt.y); ctx.rotate( 1.0 + leafAngle*0.6); ctx.scale(lsc,lsc); pointyLeaf(lw,lh); ctx.restore();
   }
 
-  // ── flower group — at chain tip ──
+  // ── flower group at chain tip ──
   ctx.save();
   ctx.translate(tip.x, tip.y);
   ctx.rotate(flowerLean);
 
-  // ── 3. PETALS first (behind face) ──
   const cp = Math.max(0, Math.min(1, (elapsed-0.55)/0.13));
-  for (let i=0; i<np; i++) {
+  const cr = headR * 0.88;
+  const shOx = headR * 0.2, shOy = headR * 0.25;
+
+  // ── 3. PETAL SHADOWS ──
+  {
+    const prevA = ctx.globalAlpha;
+    ctx.globalAlpha = prevA * 0.2;
+    ctx.fillStyle = '#1a5039';
+    for (let i = 0; i < np; i++) {
+      const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
+      if (pp <= 0) continue;
+      const psc = pop(pp);
+      const a = (i/np)*Math.PI*2 - Math.PI/2;
+      ctx.save();
+      ctx.translate(Math.cos(a)*petalDist + shOx, Math.sin(a)*petalDist + shOy);
+      ctx.scale(psc, psc);
+      ctx.beginPath(); ctx.arc(0, 0, petalR, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = prevA;
+  }
+
+  // ── 4. PETALS — 8 circles on top of shadows ──
+  for (let i = 0; i < np; i++) {
     const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
     if (pp <= 0) continue;
     const psc = pop(pp);
     const a = (i/np)*Math.PI*2 - Math.PI/2;
     ctx.save();
     ctx.translate(Math.cos(a)*petalDist, Math.sin(a)*petalDist);
-    ctx.scale(psc,psc);
+    ctx.scale(psc, psc);
     ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(0,0,petalR,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, petalR, 0, Math.PI*2); ctx.fill();
     ctx.restore();
   }
 
-  // ── 4. CENTER CIRCLE + FACE (on top of petals) ──
+  // ── 5. BASEHEAD — solid task color, on top of petals ──
   if (cp > 0) {
     const csc = pop(cp);
-    const cr = headR * 0.78; // bigger — gives face more room
-
     ctx.save(); ctx.scale(csc, csc);
-    ctx.fillStyle = lighten(col, 0.52);
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(0, 0, cr, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // ── 6. CENTER HEAD + FACE — on top of basehead ──
+  if (cp > 0) {
+    const csc = pop(cp);
+    ctx.save(); ctx.scale(csc, csc);
+
+    // White head with 20% alpha (on top of basehead)
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.beginPath(); ctx.arc(0, 0, cr, 0, Math.PI*2); ctx.fill();
 
     if (cp >= 1) {
       const mouseOnCanvas = mouseX > -900;
       const BASE_F = Math.min(cv.width, cv.height) * 0.16 / cam.zoom;
-      // look radius: flowers only track cursor within ~3× their own height
       const lookRadius = BASE_F * 3.5;
 
-      // surprise: how long since last plant (affects ALL flowers except the new one)
+      // surprise
       const surpriseAge = (Date.now() - lastPlantTime) / 1000;
-      const surpriseDur = 0.55; // seconds of surprise
+      const surpriseDur = 0.55;
       const isSurprised = surpriseAge < surpriseDur && p.plantedAt < lastPlantTime - 100;
       const surpriseT   = isSurprised ? Math.max(0, 1 - surpriseAge / surpriseDur) : 0;
 
       // pupil direction
       let pupilDx = 0, pupilDy = 0;
-      let lookT = 0; // 0=idle, 1=fully tracking
+      let lookT = 0;
       if (isSurprised && mouseOnCanvas) {
-        // look toward new plant position during surprise
         const cosL = Math.cos(-flowerLean), sinL = Math.sin(-flowerLean);
         const dx = lastPlantPos.x - (p.x + tip.x);
         const dy = lastPlantPos.y - (p.y + tip.y);
         const lx = cosL*dx - sinL*dy, ly = sinL*dx + cosL*dy;
         const d = Math.hypot(lx, ly) || 1;
-        const shift = cr * 0.18 * surpriseT;
+        const shift = cr * 0.22 * surpriseT;
         pupilDx = (lx/d) * shift;
         pupilDy = (ly/d) * shift;
         lookT = surpriseT;
       } else if (mouseOnCanvas) {
         const worldDist = Math.hypot(mouseX - (p.x + tip.x), mouseY - (p.y + tip.y));
-        // fade in tracking from 30% of radius, full at 60%, zero beyond lookRadius
         lookT = worldDist > lookRadius ? 0 : Math.min(1, worldDist / (lookRadius * 0.6));
         if (lookT > 0) {
           const cosL = Math.cos(-flowerLean), sinL = Math.sin(-flowerLean);
           const dx = mouseX - (p.x + tip.x), dy = mouseY - (p.y + tip.y);
           const lx = cosL*dx - sinL*dy, ly = sinL*dx + cosL*dy;
           const d = Math.hypot(lx, ly) || 1;
-          pupilDx = (lx/d) * cr * 0.18 * lookT;
-          pupilDy = (ly/d) * cr * 0.18 * lookT;
+          pupilDx = (lx/d) * cr * 0.22 * lookT;
+          pupilDy = (ly/d) * cr * 0.22 * lookT;
         }
       }
 
-      const eyeR   = cr * 0.20;
-      const eyeOff = cr * 0.32;
-      const pupilR = eyeR * 0.58;
-      const eyeY   = -cr * 0.10;
+      // Face proportions — eyes touching, centered
+      const eyeR   = cr * 0.28;
+      const eyeOff = eyeR * 1.05; // just touching
+      const pupilR = eyeR * 0.50;
+      const eyeY   = -cr * 0.08;
 
-      // surprise: eyes open wide
       const eyeScaleR = 1 + surpriseT * 0.55;
 
-      // blink — only when not surprised, staggered per plant
+      // blink
       if (!p._blinkT) p._blinkT = (p.seed * 0.37) % 5;
       p._blinkT += 0.016;
       const blinkCycle = 3 + (p.seed % 7) * 0.28;
@@ -1218,36 +1228,37 @@ function drawPlant(p) {
       const blinkScaleY = isBlinking ? Math.max(0.04, 1 - (blinkPhase / 0.065)) : 1;
       const eyeScaleY = blinkScaleY * eyeScaleR;
 
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      // Eyes — white sclera
+      ctx.fillStyle = '#fff';
       ctx.save(); ctx.translate(-eyeOff, eyeY); ctx.scale(eyeScaleR, eyeScaleY);
       ctx.beginPath(); ctx.arc(0, 0, eyeR, 0, Math.PI*2); ctx.fill(); ctx.restore();
       ctx.save(); ctx.translate( eyeOff, eyeY); ctx.scale(eyeScaleR, eyeScaleY);
       ctx.beginPath(); ctx.arc(0, 0, eyeR, 0, Math.PI*2); ctx.fill(); ctx.restore();
 
-      ctx.fillStyle = 'rgba(30,25,20,0.88)';
+      // Pupils — #1a5039
+      ctx.fillStyle = '#1a5039';
       ctx.save(); ctx.translate(-eyeOff + pupilDx, eyeY + pupilDy); ctx.scale(eyeScaleR, eyeScaleY);
       ctx.beginPath(); ctx.arc(0, 0, pupilR, 0, Math.PI*2); ctx.fill(); ctx.restore();
       ctx.save(); ctx.translate( eyeOff + pupilDx, eyeY + pupilDy); ctx.scale(eyeScaleR, eyeScaleY);
       ctx.beginPath(); ctx.arc(0, 0, pupilR, 0, Math.PI*2); ctx.fill(); ctx.restore();
 
-      // mouth — open in surprise (O shape), smile when hovered, gentle rest
+      // Mouth — white smile with round caps
       const isHovered = hoveredPlant === p;
       const smileTarget = isSurprised ? -0.3 : (isHovered ? 1 : 0.35);
       if (!p._smile) p._smile = 0.35;
       p._smile += (smileTarget - p._smile) * (isSurprised ? 0.25 : 0.10);
 
       if (isSurprised && surpriseT > 0.3) {
-        // O-mouth for surprise
         const oR = cr * (0.13 + surpriseT * 0.11);
-        const oY = cr * 0.28;
-        ctx.fillStyle = 'rgba(30,25,20,0.70)';
+        const oY = cr * 0.42;
+        ctx.fillStyle = '#fff';
         ctx.beginPath(); ctx.ellipse(0, oY, oR * 0.75, oR, 0, 0, Math.PI*2); ctx.fill();
       } else {
-        const smileW = cr * (0.24 + p._smile * 0.24);
-        const smileY = cr * (0.22 + p._smile * 0.06);
-        const smileD = cr * (0.08 + p._smile * 0.18);
-        ctx.strokeStyle = 'rgba(30,25,20,0.72)';
-        ctx.lineWidth = cr * 0.11;
+        const smileW = cr * (0.28 + p._smile * 0.20);
+        const smileY = cr * (0.34 + p._smile * 0.06);
+        const smileD = cr * (0.10 + p._smile * 0.18);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = cr * 0.12;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(-smileW, smileY);
@@ -1259,26 +1270,23 @@ function drawPlant(p) {
     ctx.restore();
   }
 
-  ctx.restore(); // end flower
+  ctx.restore(); // end flower group
 
-  // ── 5. GRASS BLADES ──
-  for (let i=0; i<numBlades; i++) {
+  // ── 6. GRASS — task colored rectangles at angles, spread around base ──
+  for (let i = 0; i < numBlades; i++) {
     const bp = Math.max(0, Math.min(1, (elapsed-(grassStart+i*0.06))/0.15));
     if (bp <= 0) continue;
     const bsc = pop(bp);
-    const bx2   = (rr()-0.5)*maxH*1.1;
-    const by2   = (rr()-0.5)*maxH*0.35;
-    const bh    = maxH*(0.14+rr()*0.16)*bsc;
-    const bw    = stemW*(0.9+rr()*0.7);
+    const bx    = (rr()-0.5)*maxH*0.85;
+    const by    = (rr()-0.5)*maxH*0.25;
+    const bh    = maxH*(0.10+rr()*0.12)*bsc;
+    const bw    = stemW*(1.2+rr()*0.8);
     const btilt = (rr()-0.5)*1.1;
     ctx.save();
-    ctx.translate(bx2, by2); ctx.rotate(btilt);
-    ctx.fillStyle = i%2===0 ? grassCol : grassDk;
-    ctx.beginPath();
-    ctx.moveTo(-bw/2,0); ctx.lineTo(bw/2,0);
-    ctx.quadraticCurveTo(bw*0.15,-bh*0.6, 0,-bh);
-    ctx.quadraticCurveTo(-bw*0.15,-bh*0.6, -bw/2,0);
-    ctx.fill();
+    ctx.translate(bx, by);
+    ctx.rotate(btilt);
+    ctx.fillStyle = col;
+    ctx.fillRect(-bw/2, -bh, bw, bh);
     ctx.restore();
   }
 
@@ -1295,10 +1303,8 @@ function drawPlant(p) {
       ctx.globalAlpha = lop*0.62;
       ctx.font=`400 ${fs}px 'DM Mono',monospace`;
       ctx.fillStyle='#444'; ctx.textAlign='center';
-      // truncate long titles
       const maxW = 80 / cam.zoom;
       let txt = label;
-      ctx.font=`400 ${fs}px 'DM Mono',monospace`;
       while (txt.length > 4 && ctx.measureText(txt).width > maxW) txt = txt.slice(0,-1);
       if (txt.length < label.length) txt += '…';
       ctx.fillText(txt, p.x, p.y+fs+5);
@@ -1373,10 +1379,13 @@ const HOLD_DURATION = 600; // ms to fill the ring
 function hitTestPlant(wx, wy) {
   if (!planted.length) return null;
   const BASE = Math.min(cv.width, cv.height) * 0.16 / cam.zoom;
+  const STEM_SZ = { small: 0.55, medium: 1.0, large: 1.7 };
   for (const p of planted) {
     const rr2 = srng(p.seed);
-    const maxH = BASE*(PH[p.priority]||0.54)*(0.8+rr2()*0.4);
-    const headR = maxH*0.22;
+    const stemScale = STEM_SZ[p.size || 'medium'] || 1.0;
+    const maxH = BASE*(PH[p.priority]||0.54)*stemScale*(0.8+rr2()*0.4);
+    const headBase = BASE * 0.54 * (0.8+rr2()*0.4);
+    const headR = headBase*0.22;
     const elapsed = (Date.now()-p.plantedAt)/1000;
     const stemH = maxH * pop(Math.min(1, elapsed/0.40));
     if (Math.hypot(wx-p.x, wy-(p.y-stemH)) < headR*1.7) return p;
