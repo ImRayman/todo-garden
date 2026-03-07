@@ -886,7 +886,7 @@ let seeds = [], planted = [];
 let raf = null, T = 0;
 let selectedSeed = null;
 let mouseX = -999, mouseY = -999;
-const OWN_COLORS = ['#e85c5c','#5aabdc','#5ec45e','#c468b8','#e8b830','#38b8a0','#e87830','#7878d4','#c8d840','#e86898'];
+const OWN_COLORS = ['#fd7f7f','#7fb8fd','#67cf53','#a37ffd','#f0d146','#38b8a0','#fd9d49','#7878d4','#c8d840','#e86898'];
 const ownerColorMap = {}; let ownerCI = 0;
 function ownerColor(n) {
   if (!n||n==='Unassigned') return '#b0ada4';
@@ -1829,13 +1829,13 @@ function cancelPlanting() {
 // Task color palette — affects flower color
 const TD_COLORS = [
   { id:'default', hex:null,      label:'Default' },
-  { id:'red',     hex:'#e85c5c', label:'Red'     },
-  { id:'orange',  hex:'#e8903a', label:'Orange'  },
-  { id:'yellow',  hex:'#e8c830', label:'Yellow'  },
-  { id:'green',   hex:'#5ec45e', label:'Green'   },
-  { id:'teal',    hex:'#38b8a0', label:'Teal'    },
-  { id:'blue',    hex:'#5aabdc', label:'Blue'    },
-  { id:'purple',  hex:'#c468b8', label:'Purple'  },
+  { id:'red',     hex:'#fd7f7f', label:'Red'     },
+  { id:'orange',  hex:'#fd9d49', label:'Orange'  },
+  { id:'yellow',  hex:'#f0d146', label:'Yellow'  },
+  { id:'green',   hex:'#67cf53', label:'Green'   },
+  { id:'cyan',    hex:'#38b8a0', label:'Cyan'    },
+  { id:'blue',    hex:'#7fb8fd', label:'Blue'    },
+  { id:'purple',  hex:'#a37ffd', label:'Purple'  },
 ];
 
 function tdTaskColor(task) {
@@ -2227,7 +2227,7 @@ function buildTray() {
 
 // ── CANVAS CONFETTI — per plant celebration ──
 const confettiParticles = [];
-const CONFETTI_COLORS = ['#e85c5c','#5aabdc','#5ec45e','#c468b8','#e8b830','#38b8a0','#e87830','#7878d4','#f9f871','#ff9f7f'];
+const CONFETTI_COLORS = ['#fd7f7f','#7fb8fd','#67cf53','#a37ffd','#f0d146','#38b8a0','#fd9d49','#7878d4','#f9f871','#ff9f7f'];
 
 function spawnConfetti(wx, wy) {
   for (let i = 0; i < 28; i++) {
