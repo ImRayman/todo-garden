@@ -198,6 +198,27 @@ select option { background:#fff; }
 .todo-size-btn { flex:1;padding:0.34rem 0.2rem;border-radius:6px;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:0.58rem;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:0.04em;transition:border-color 0.12s,background 0.12s,color 0.12s; }
 .todo-size-btn:hover { border-color:var(--border2);color:var(--text); }
 .todo-size-btn.active { border-color:var(--accent);background:var(--accent-bg);color:var(--accent);font-weight:500; }
+
+/* subtask checklist */
+.todo-subtask-list { display:flex;flex-direction:column;gap:0.2rem; }
+.todo-subtask { display:flex;align-items:center;gap:0.35rem;padding:0.18rem 0;font-size:0.62rem;color:var(--text); }
+.todo-subtask-check { width:14px;height:14px;border-radius:4px;border:1.5px solid var(--border2);background:var(--card);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background 0.12s,border-color 0.12s;font-size:0.5rem;color:transparent;line-height:1; }
+.todo-subtask-check:hover { border-color:var(--accent); }
+.todo-subtask-check.checked { background:var(--accent);border-color:var(--accent);color:#fff; }
+.todo-subtask-title { flex:1;min-width:0;word-break:break-word;line-height:1.4; }
+.todo-subtask-title.done { text-decoration:line-through;color:var(--faint); }
+.todo-subtask-del { background:none;border:none;cursor:pointer;color:var(--faint);font-size:0.6rem;padding:0 0.1rem;opacity:0;transition:opacity 0.12s;flex-shrink:0; }
+.todo-subtask:hover .todo-subtask-del { opacity:0.7; }
+.todo-subtask-del:hover { opacity:1!important;color:#c06050; }
+.todo-subtask-add { display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem; }
+.todo-subtask-add-btn { background:none;border:none;cursor:pointer;font-size:0.56rem;color:var(--faint);font-family:'DM Mono',monospace;padding:0.15rem 0;transition:color 0.12s; }
+.todo-subtask-add-btn:hover { color:var(--accent); }
+.todo-subtask-input { flex:1;min-width:0;font-size:0.6rem;color:var(--text);background:var(--bg2);border:1.5px solid var(--border);border-radius:5px;padding:0.25rem 0.4rem;font-family:'DM Mono',monospace;outline:none;transition:border-color 0.15s; }
+.todo-subtask-input:focus { border-color:var(--accent); }
+.todo-subtask-progress { display:flex;align-items:center;gap:0.35rem;margin-top:0.1rem; }
+.todo-subtask-progress-track { flex:1;height:3px;background:var(--border);border-radius:999px;overflow:hidden; }
+.todo-subtask-progress-fill { height:100%;background:var(--accent);border-radius:999px;transition:width 0.3s ease; }
+.todo-subtask-progress-text { font-size:0.46rem;color:var(--faint);flex-shrink:0; }
 /* moving ghost — faded placeholder while repositioning */
 /* floating move label */
 
@@ -706,7 +727,12 @@ function tdApplyGarden() {
     planted = [];
     const savedPlants = loadGarden(gkey) || [];
     const plantedIds  = new Set(savedPlants.map(p => p.id));
-    garden.tasks.forEach(t => { if (plantedIds.has(t.id)) t.done = true; });
+    garden.tasks.forEach(t => {
+      if (plantedIds.has(t.id)) {
+        const allSubsDone = !t.subtasks?.length || t.subtasks.every(s => s.done);
+        if (allSubsDone) t.done = true;
+      }
+    });
     tdSave();
     planted = savedPlants.map(p => {
       const task = garden.tasks.find(t => t.id === p.id);
@@ -725,12 +751,18 @@ function tdApplyGarden() {
   } else {
     // Same garden — just sync done flags from live planted (don't touch planted array)
     const livePlantedIds = new Set(planted.map(p => p.id));
-    garden.tasks.forEach(t => { if (livePlantedIds.has(t.id)) t.done = true; });
+    garden.tasks.forEach(t => {
+      if (livePlantedIds.has(t.id)) {
+        const allSubsDone = !t.subtasks?.length || t.subtasks.every(s => s.done);
+        if (allSubsDone) t.done = true;
+      }
+    });
   }
 
-  // Rebuild seeds = undone tasks
+  // Rebuild seeds = undone + unplanted tasks
+  const _plantedIds = new Set(planted.map(p => p.id));
   seeds = garden.tasks
-    .filter(t => !t.done)
+    .filter(t => !t.done && !_plantedIds.has(t.id))
     .map((t, i) => ({
       id: t.id, title: t.title, type: 'task', owner: 'Me',
       state: 'Todo', priority: 'medium', sprint: garden.name,
@@ -794,6 +826,56 @@ function tdDeleteTask(taskId) {
   planted = planted.filter(p => p.id !== taskId);
   tdSave(); tdApplyGarden(); saveGarden();
 }
+
+// ── Subtask helpers ──
+function taskProgress(task) {
+  if (!task.subtasks?.length) return 1;
+  return task.subtasks.filter(s => s.done).length / task.subtasks.length;
+}
+function tdAddSubtask(taskId, title) {
+  const garden = tdGetGarden(); if (!garden) return;
+  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  if (!task.subtasks) task.subtasks = [];
+  task.subtasks.push({ id: tdUID(), title, done: false });
+  tdSave(); saveGarden(); buildTray();
+}
+function tdToggleSubtask(taskId, subtaskId) {
+  const garden = tdGetGarden(); if (!garden) return;
+  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  const sub = task.subtasks?.find(s => s.id === subtaskId); if (!sub) return;
+  sub.done = !sub.done;
+  // Wiggle the flower on subtask change
+  const pp = planted.find(p => p.id === taskId);
+  if (pp) kickSpring(pp, 0.6 + Math.random() * 0.5);
+  // Auto-complete: if all subtasks done and task is planted, mark done
+  const isTaskPlanted = !!pp;
+  const allDone = task.subtasks.every(s => s.done);
+  if (allDone && isTaskPlanted && !task.done) {
+    task.done = true;
+    tdSave(); saveGarden();
+    // Play completion animation
+    const card = document.querySelector(`.todo-task[data-tid="${taskId}"]`);
+    if (card) {
+      card.classList.add('td-completing');
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+      for (let i=0; i<8; i++) spawnConfettiScreen(cx + (Math.random()-0.5)*rect.width*0.8, cy + (Math.random()-0.5)*rect.height*0.8);
+      // Also spawn confetti on the flower
+      const pp = planted.find(p => p.id === taskId);
+      if (pp) spawnConfetti(pp.x, pp.y);
+      setTimeout(() => { buildTray(); }, 560);
+      return;
+    }
+  }
+  tdSave(); saveGarden(); buildTray();
+}
+function tdDeleteSubtask(taskId, subtaskId) {
+  const garden = tdGetGarden(); if (!garden) return;
+  const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  task.subtasks = (task.subtasks || []).filter(s => s.id !== subtaskId);
+  tdSave(); saveGarden(); buildTray();
+}
+let _tdAddingSubtaskFor = null; // task ID currently showing subtask input
 
 // ── Inline task title editing ──
 let _tdEditingTaskId = null;
@@ -1032,11 +1114,17 @@ function drawPlant(p) {
   const elapsed = (Date.now() - p.plantedAt) / 1000;
   if (elapsed <= 0.01) return;
 
+  // Subtask progress: 0→1 (no subtasks = fully grown)
+  const garden = tdGetGarden();
+  const _task = garden?.tasks.find(t => t.id === p.id);
+  const subProg = _task ? taskProgress(_task) : 1;
+
   // Size controls stem length only — flower head stays same scale
   const STEM_SZ = { small: 0.55, medium: 1.0, large: 1.7 };
   const stemScale = STEM_SZ[p.size || 'medium'] || 1.0;
 
-  const maxH    = BASE * (PH[p.priority]||0.54) * stemScale * (0.8 + rr()*0.4);
+  const _maxHFull = BASE * (PH[p.priority]||0.54) * stemScale * (0.8 + rr()*0.4);
+  const maxH    = _maxHFull * (0.3 + 0.7 * subProg);
   const headBase = BASE * 0.54 * (0.8 + rr()*0.4);
 
   // Due date: fade out and disappear if overdue
@@ -1099,7 +1187,7 @@ function drawPlant(p) {
 
   // ── 2. LEAVES — task colored, at 75% down stem (near base) ──
   const leafProg = Math.max(0, Math.min(1, (elapsed-0.35)/0.2));
-  if (leafProg > 0 && stemH > maxH*0.15) {
+  if (leafProg > 0 && stemH > maxH*0.15 && subProg >= 0.5) {
     const lh = headBase*0.28, lw = headBase*0.12;
     const lsc = pop(leafProg);
     const leafIdx = (pts.length-1) * 0.28; // 28% from tip = 72% from base
@@ -1126,12 +1214,12 @@ function drawPlant(p) {
   // ── 3. PETAL SHADOWS ──
   {
     const prevA = ctx.globalAlpha;
-    ctx.globalAlpha = prevA * 0.2;
+    ctx.globalAlpha = prevA * 0.2 * (0.3 + 0.7 * subProg);
     ctx.fillStyle = '#1a5039';
     for (let i = 0; i < np; i++) {
       const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
       if (pp <= 0) continue;
-      const psc = pop(pp);
+      const psc = pop(pp) * subProg;
       const a = (i/np)*Math.PI*2 - Math.PI/2;
       ctx.save();
       ctx.translate(Math.cos(a)*petalDist + shOx, Math.sin(a)*petalDist + shOy);
@@ -1142,18 +1230,23 @@ function drawPlant(p) {
     ctx.globalAlpha = prevA;
   }
 
-  // ── 4. PETALS — 8 circles on top of shadows ──
-  for (let i = 0; i < np; i++) {
-    const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
-    if (pp <= 0) continue;
-    const psc = pop(pp);
-    const a = (i/np)*Math.PI*2 - Math.PI/2;
-    ctx.save();
-    ctx.translate(Math.cos(a)*petalDist, Math.sin(a)*petalDist);
-    ctx.scale(psc, psc);
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(0, 0, petalR, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
+  // ── 4. PETALS — 8 circles, scaled by subtask progress ──
+  {
+    const prevA = ctx.globalAlpha;
+    ctx.globalAlpha = prevA * (0.3 + 0.7 * subProg);
+    for (let i = 0; i < np; i++) {
+      const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
+      if (pp <= 0) continue;
+      const psc = pop(pp) * subProg;
+      const a = (i/np)*Math.PI*2 - Math.PI/2;
+      ctx.save();
+      ctx.translate(Math.cos(a)*petalDist, Math.sin(a)*petalDist);
+      ctx.scale(psc, psc);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, 0, petalR, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = prevA;
   }
 
   // ── 5. BASEHEAD — solid task color, on top of petals ──
@@ -1174,7 +1267,7 @@ function drawPlant(p) {
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.beginPath(); ctx.arc(0, 0, cr, 0, Math.PI*2); ctx.fill();
 
-    if (cp >= 1) {
+    if (cp >= 1 && subProg >= 1) {
       const mouseOnCanvas = mouseX > -900;
       const BASE_F = Math.min(cv.width, cv.height) * 0.16 / cam.zoom;
       const lookRadius = BASE_F * 3.5;
@@ -1739,17 +1832,19 @@ function plantAt(x, y) {
   spawnConfetti(x, y);
   playPlantSound();
 
-  // Mark the task as done + play complete animation
+  // Mark the task as done (only if no incomplete subtasks)
   const garden = tdGetGarden();
   if (garden) {
     const task = garden.tasks.find(t => t.id === selectedSeed.id);
     if (task) {
-      task.done = true; tdSave();
+      const allSubsDone = !task.subtasks?.length || task.subtasks.every(s => s.done);
+      if (allSubsDone) task.done = true;
+      tdSave();
       const taskId = selectedSeed.id;
       cancelPlanting();
       saveGarden(); updateDropHint();
       const card = document.querySelector(`.todo-task[data-tid="${taskId}"]`);
-      if (card) {
+      if (card && allSubsDone) {
         card.classList.add('td-completing');
         const rect = card.getBoundingClientRect();
         const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
@@ -1921,9 +2016,36 @@ function buildTray() {
         doneTasks.forEach(task => {
           const isPlanted = planted.some(p => p.id === task.id);
           const dotColor  = tdTaskColor(task) || '#5ec45e';
+          const hasSubs = task.subtasks?.length > 0;
+          const isExpDone = _tdExpandedId === task.id;
           const el = document.createElement('div');
-          el.className = 'todo-done-item';
-          el.innerHTML = `<div class="todo-done-dot" style="background:${dotColor}"></div><span style="flex:1">${task.title}</span><span style="font-size:0.5rem;color:var(--faint)">${isPlanted ? '🌱' : '✓'}</span>`;
+          el.style.cssText = 'display:flex;flex-direction:column;gap:0;border-radius:7px;background:var(--card);border:1.5px solid var(--border);overflow:hidden;';
+          const subInfo = hasSubs ? `<span style="font-size:0.46rem;color:var(--faint);margin-left:0.2rem">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>` : '';
+          const chevron = hasSubs ? `<span style="color:var(--faint);font-size:0.5rem;transition:transform 0.18s;transform:rotate(${isExpDone?'90':'0'}deg)">▶</span>` : '';
+          el.innerHTML = `<div class="todo-done-item" style="border:none;cursor:${hasSubs?'pointer':'default'}">${chevron}<div class="todo-done-dot" style="background:${dotColor}"></div><span style="flex:1">${task.title}${subInfo}</span><span style="font-size:0.5rem;color:var(--faint)">${isPlanted ? '🌱' : '✓'}</span></div>
+          ${isExpDone && hasSubs ? `<div style="padding:0.15rem 0.7rem 0.5rem;border-top:1px solid var(--border)">
+            <div class="todo-subtask-list">
+              ${task.subtasks.map(sub => `
+                <div class="todo-subtask" data-sid="${sub.id}">
+                  <div class="todo-subtask-check ${sub.done?'checked':''}" data-sid="${sub.id}" data-tid="${task.id}">${sub.done?'✓':''}</div>
+                  <span class="todo-subtask-title ${sub.done?'done':''}">${sub.title}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="todo-subtask-progress" style="margin-top:0.25rem">
+              <div class="todo-subtask-progress-track"><div class="todo-subtask-progress-fill" style="width:${Math.round(taskProgress(task)*100)}%"></div></div>
+              <span class="todo-subtask-progress-text">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>
+            </div>
+          </div>` : ''}`;
+          if (hasSubs) {
+            el.querySelector('.todo-done-item').addEventListener('click', () => {
+              _tdExpandedId = isExpDone ? null : task.id;
+              buildTray();
+            });
+            el.querySelectorAll('.todo-subtask-check').forEach(cb => {
+              cb.addEventListener('click', e => { e.stopPropagation(); tdToggleSubtask(task.id, cb.dataset.sid); });
+            });
+          }
           scroll.appendChild(el);
         });
       }
@@ -1943,6 +2065,7 @@ function buildTray() {
       const isNew       = _tdNewTaskIds.has(task.id);
       const taskColor   = tdTaskColor(task);
       const isExpanded  = _tdExpandedId === task.id;
+      const isPlanted   = planted.some(p => p.id === task.id);
 
       const isEditing = _tdEditingTaskId === task.id;
       const el = document.createElement('div');
@@ -1959,9 +2082,10 @@ function buildTray() {
       const dotStyle = taskColor ? `background:${taskColor}` : 'background:var(--border2,#c8d4c0)';
 
       // Title area: either editing input or static text
+      const plantedBadge = isPlanted ? `<span style="font-size:0.5rem;margin-left:0.2rem">🌱</span>` : '';
       const titleHtml = isEditing
         ? `<input id="td-edit-task-input" class="todo-task-title-input" value="${task.title.replace(/"/g,'&quot;')}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')tdConfirmEditTask('${task.id}');if(event.key==='Escape')tdCancelEditTask()"/>`
-        : `<div class="todo-task-title">${task.title}</div>`;
+        : `<div class="todo-task-title">${task.title}${plantedBadge}</div>`;
 
       el.innerHTML = `
         <div class="todo-task-row">
@@ -1981,6 +2105,7 @@ function buildTray() {
         </div>
         ${isExpanded && !isEditing ? `
         <div class="todo-expand">
+          ${!isPlanted ? `
           <div class="todo-expand-label">Flower color</div>
           <div class="todo-color-row">
             ${TD_COLORS.map(c => `
@@ -1995,8 +2120,32 @@ function buildTray() {
             ${['small','medium','large'].map(sz => `
               <button class="todo-size-btn ${(task.size||'medium')===sz ? 'active':''}" data-size="${sz}">${sz}</button>
             `).join('')}
+          </div>` : `
+          <div style="display:flex;align-items:center;gap:0.3rem;font-size:0.52rem;color:var(--accent);margin-bottom:0.15rem">🌱 Planted — complete subtasks to finish</div>
+          `}
+          <div class="todo-expand-label" style="margin-top:0.45rem">Subtasks</div>
+          <div class="todo-subtask-list">
+            ${(task.subtasks||[]).map(sub => `
+              <div class="todo-subtask" data-sid="${sub.id}">
+                <div class="todo-subtask-check ${sub.done?'checked':''}" data-sid="${sub.id}">${sub.done?'✓':''}</div>
+                <span class="todo-subtask-title ${sub.done?'done':''}">${sub.title}</span>
+                <button class="todo-subtask-del" data-sid="${sub.id}">✕</button>
+              </div>
+            `).join('')}
+            ${_tdAddingSubtaskFor === task.id ? `
+              <div class="todo-subtask-add">
+                <input class="todo-subtask-input" id="td-subtask-input" placeholder="subtask name..." />
+              </div>
+            ` : `
+              <button class="todo-subtask-add-btn" data-tid="${task.id}">+ add subtask</button>
+            `}
           </div>
-          <button class="todo-plant-btn" data-tid="${task.id}">🌱 Plant</button>
+          ${(task.subtasks?.length) ? `
+          <div class="todo-subtask-progress">
+            <div class="todo-subtask-progress-track"><div class="todo-subtask-progress-fill" style="width:${Math.round(taskProgress(task)*100)}%"></div></div>
+            <span class="todo-subtask-progress-text">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>
+          </div>` : ''}
+          ${!isPlanted ? `<button class="todo-plant-btn" data-tid="${task.id}">🌱 Plant</button>` : ''}
         </div>` : ''}`;
 
       // Focus edit input
@@ -2019,7 +2168,8 @@ function buildTray() {
           });
         });
         // plant button — sync color + size then enter plant mode
-        el.querySelector('.todo-plant-btn').addEventListener('click', e => {
+        const plantBtn = el.querySelector('.todo-plant-btn');
+        if (plantBtn) plantBtn.addEventListener('click', e => {
           e.stopPropagation();
           const seed = seeds.find(s => s.id === task.id);
           if (!seed) return;
@@ -2028,6 +2178,37 @@ function buildTray() {
           seed.dueDate = task.dueDate || null;
           selectSeed(seed, el);
         });
+        // subtask checkboxes
+        el.querySelectorAll('.todo-subtask-check').forEach(cb => {
+          cb.addEventListener('click', e => { e.stopPropagation(); tdToggleSubtask(task.id, cb.dataset.sid); });
+        });
+        // subtask delete buttons
+        el.querySelectorAll('.todo-subtask-del').forEach(db => {
+          db.addEventListener('click', e => { e.stopPropagation(); tdDeleteSubtask(task.id, db.dataset.sid); });
+        });
+        // add subtask button
+        const addSubBtn = el.querySelector('.todo-subtask-add-btn');
+        if (addSubBtn) {
+          addSubBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            _tdAddingSubtaskFor = task.id;
+            buildTray();
+          });
+        }
+        // subtask input
+        const subInput = el.querySelector('#td-subtask-input');
+        if (subInput) {
+          setTimeout(() => subInput.focus(), 50);
+          subInput.addEventListener('click', e => e.stopPropagation());
+          subInput.addEventListener('keydown', e => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+              const val = subInput.value.trim();
+              if (val) { _tdAddingSubtaskFor = null; tdAddSubtask(task.id, val); }
+            }
+            if (e.key === 'Escape') { _tdAddingSubtaskFor = null; buildTray(); }
+          });
+        }
       }
 
       // color swatches
@@ -2042,7 +2223,7 @@ function buildTray() {
       let _taskClickTimer = null;
       el.addEventListener('click', e => {
         if (isEditing || didDrag) return;
-        if (e.target.closest('.todo-del') || e.target.closest('.todo-color-swatch') || e.target.closest('.todo-plant-btn') || e.target.closest('.todo-size-btn') || e.target.closest('.todo-edit-icon')) return;
+        if (e.target.closest('.todo-del') || e.target.closest('.todo-color-swatch') || e.target.closest('.todo-plant-btn') || e.target.closest('.todo-size-btn') || e.target.closest('.todo-edit-icon') || e.target.closest('.todo-subtask-check') || e.target.closest('.todo-subtask-del') || e.target.closest('.todo-subtask-add-btn') || e.target.closest('.todo-subtask-input')) return;
         if (_taskClickTimer) { clearTimeout(_taskClickTimer); _taskClickTimer = null; return; }
         _taskClickTimer = setTimeout(() => {
           _taskClickTimer = null;
@@ -2082,7 +2263,7 @@ function buildTray() {
       }
 
       el.addEventListener('pointerdown', e => {
-        if (isEditing || isExpanded || e.button !== 0) return;
+        if (isEditing || isExpanded || isPlanted || e.button !== 0) return;
         if (e.target.closest('.todo-del') || e.target.closest('.todo-edit-icon')) return;
         pointerDown = true; didDrag = false;
         startX = e.clientX; startY = e.clientY;
