@@ -229,8 +229,9 @@ select option { background:#fff; }
 /* floating move label */
 
 /* done tab items */
-.todo-done-item { display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.7rem;border-radius:7px;background:#4a7c59;border:1.5px solid #3d6b4a;font-size:0.68rem;color:#fff; }
-.todo-done-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0;opacity:0.7; }
+.todo-done-item { display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.6rem;border-radius:7px;background:var(--bg2);border:1px solid var(--border);font-size:0.62rem;color:var(--muted); }
+.todo-done-item .done-check { width:18px;height:18px;border-radius:50%;background:#4a7c59;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:0.42rem;line-height:1; }
+.todo-done-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0;opacity:0.6; }
 
 /* slide-in */
 @keyframes slideInTask { from{opacity:0;transform:translateX(-18px)} to{opacity:1;transform:translateX(0)} }
@@ -316,7 +317,7 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 .drop-hint span { font-size:1.8rem;display:block;margin-bottom:0.2rem; }
 
 /* tooltip */
-.tt { position:fixed;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.85rem;font-size:0.6rem;color:var(--muted);pointer-events:none;z-index:500;opacity:0;transition:opacity 0.1s;max-width:210px;line-height:1.85;box-shadow:0 4px 18px rgba(0,0,0,0.07); }
+.tt { position:fixed;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.85rem;font-size:0.6rem;color:var(--muted);pointer-events:none;z-index:500;opacity:0;transition:opacity 0.1s;max-width:260px;line-height:1.85;box-shadow:0 4px 18px rgba(0,0,0,0.07); }
 .tt.on { opacity:1; }
 .tt .ttl { color:var(--text);font-size:0.65rem;font-weight:500;line-height:1.35;margin-bottom:0.25rem; }
 .tt .ttr { display:flex;align-items:center;gap:0.35rem; }
@@ -1007,6 +1008,10 @@ function tdAddSubtask(taskId, title) {
       })
       .catch(e => console.error('Monday subitem create error:', e));
   }
+  // Azure sync: write subtasks into description
+  if (garden.azure && task.azureItemId) {
+    azureSyncSubtasksToDescription(garden, task);
+  }
 }
 function tdToggleSubtask(taskId, subtaskId) {
   const garden = tdGetGarden(); if (!garden) return;
@@ -1021,6 +1026,10 @@ function tdToggleSubtask(taskId, subtaskId) {
       ? mondayCompleteSubitem(garden.monday.token, subBoardId, sub.mondaySubitemId, subColId)
       : mondayResetSubitem(garden.monday.token, subBoardId, sub.mondaySubitemId, subColId)
     ).catch(e => console.error('Monday subitem status error:', e));
+  }
+  // Azure sync: write subtasks into description
+  if (garden.azure && task.azureItemId) {
+    azureSyncSubtasksToDescription(garden, task);
   }
   // Wiggle the flower on subtask change
   const pp = planted.find(p => p.id === taskId);
@@ -1060,6 +1069,10 @@ function tdDeleteSubtask(taskId, subtaskId) {
   // Monday sync: delete subitem
   if (garden.monday && sub?.mondaySubitemId) {
     mondayDeleteItem(garden.monday.token, sub.mondaySubitemId).catch(e => console.error('Monday delete subitem error:', e));
+  }
+  // Azure sync: write subtasks into description
+  if (garden.azure && task.azureItemId) {
+    azureSyncSubtasksToDescription(garden, task);
   }
 }
 let _tdAddingSubtaskFor = null; // task ID currently showing subtask input
@@ -1507,7 +1520,7 @@ async function azureGetWorkItems(org, project, token, iterationPath) {
   const allItems = [];
   for (let i = 0; i < ids.length; i += batchSize) {
     const batch = ids.slice(i, i + batchSize).join(',');
-    const data = await azureAPI(org, token, `${project}/_apis/wit/workitems?ids=${batch}&fields=System.Id,System.Title,System.State,System.AssignedTo,System.WorkItemType,System.ChangedDate&api-version=7.1`);
+    const data = await azureAPI(org, token, `${project}/_apis/wit/workitems?ids=${batch}&fields=System.Id,System.Title,System.State,System.AssignedTo,System.WorkItemType,System.ChangedDate,System.Description&api-version=7.1`);
     allItems.push(...(data.value || []));
   }
   return allItems;
@@ -1593,6 +1606,11 @@ function azureItemsToTasks(items, garden) {
     const assignedTo = item.fields['System.AssignedTo'];
     const name = assignedTo?.displayName || null;
     const memberColor = garden ? azureMemberColor(garden, name) : null;
+    const rawDesc = item.fields['System.Description'] || '';
+
+    // Parse description: extract subtasks from bullet list, keep the rest as description text
+    const parsed = azureParseDescription(rawDesc);
+
     return {
       id: 'az_' + item.id,
       title: item.fields['System.Title'],
@@ -1601,9 +1619,60 @@ function azureItemsToTasks(items, garden) {
       memberColor: memberColor,
       size: 'medium',
       azureItemId: item.id,
-      assignedTo: name
+      assignedTo: name,
+      description: parsed.description || null,
+      subtasks: parsed.subtasks.length ? parsed.subtasks : undefined
     };
   });
+}
+
+// Parse Azure HTML description into { description, subtasks[] }
+function azureParseDescription(html) {
+  if (!html) return { description: null, subtasks: [] };
+  const subtasks = [];
+  // Match <li> items — done subtasks have <s>, <del>, or <strike> wrapping
+  const liRegex = /<li[^>]*>(.*?)<\/li>/gi;
+  let match;
+  while ((match = liRegex.exec(html)) !== null) {
+    let content = match[1].trim();
+    // Check for strikethrough (done)
+    const strikeMatch = content.match(/^<(?:s|del|strike)>(.*?)<\/(?:s|del|strike)>$/i);
+    const isDone = !!strikeMatch;
+    const title = (isDone ? strikeMatch[1] : content).replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+    if (title) {
+      subtasks.push({ id: tdUID(), title, done: isDone });
+    }
+  }
+  // Remove the <ul>...</ul> block from description to get the "text" portion
+  let descHtml = html.replace(/<ul[^>]*>[\s\S]*?<\/ul>/gi, '').trim();
+  const description = descHtml.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return { description: description || null, subtasks };
+}
+
+// Build Azure HTML description from task description + subtasks
+function azureBuildDescription(task) {
+  let html = '';
+  if (task.description) {
+    html += `<p>${task.description}</p>`;
+  }
+  if (task.subtasks?.length) {
+    html += '<ul>';
+    task.subtasks.forEach(sub => {
+      const title = sub.title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      html += sub.done ? `<li><s>${title}</s></li>` : `<li>${title}</li>`;
+    });
+    html += '</ul>';
+  }
+  return html;
+}
+
+// Sync subtasks to Azure by updating the work item Description
+function azureSyncSubtasksToDescription(garden, task) {
+  const html = azureBuildDescription(task);
+  azureAPI(garden.azure.org, garden.azure.token,
+    `${garden.azure.project}/_apis/wit/workitems/${task.azureItemId}?api-version=7.1`, 'PATCH',
+    [{ op: 'add', path: '/fields/System.Description', value: html }]
+  ).catch(e => console.error('Azure description sync error:', e));
 }
 
 // ── Azure Modal UI ──
@@ -1767,7 +1836,17 @@ function azureMergeTasks(garden, remoteTasks) {
       local.done = remote.done;
       local.assignedTo = remote.assignedTo;
       local.memberColor = remote.memberColor;
+      local.description = remote.description || local.description || null;
       if (!local.azureItemId) local.azureItemId = remote.azureItemId;
+      // Merge subtasks from Azure description (replace with remote if present)
+      if (remote.subtasks?.length) {
+        // Match by title to preserve local IDs where possible
+        const merged = remote.subtasks.map(rs => {
+          const existing = (local.subtasks || []).find(ls => ls.title === rs.title);
+          return existing ? { ...existing, done: rs.done } : rs;
+        });
+        local.subtasks = merged;
+      }
     } else {
       garden.tasks.push(remote);
     }
@@ -2781,11 +2860,13 @@ cv.addEventListener('mousemove', e => {
         <span style="font-size:0.52rem;color:var(--muted)">${_assignee}</span>
       </div>`;
     })() : '';
+    const _desc = _hitTask?.description || null;
+    const _descHtml = _desc ? `<div style="font-size:0.48rem;color:var(--faint);line-height:1.5;margin-top:0.25rem;max-width:200px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${_desc.length > 150 ? _desc.slice(0,150) + '…' : _desc}</div>` : '';
     ttEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem">
         <span style="${_dotStyle}"></span>
         <span class="ttl" style="margin:0">${hit.title}</span>
         <span style="font-size:0.48rem;color:var(--faint);flex-shrink:0">${_sizeLabel}</span>
-      </div>${_assigneeHtml}`;
+      </div>${_assigneeHtml}${_descHtml}`;
     ttEl.classList.add('on');
     ttEl.style.left = Math.min(e.clientX+14,window.innerWidth-220)+'px';
     ttEl.style.top  = (e.clientY-12)+'px';
@@ -3022,28 +3103,35 @@ function buildTray() {
       if (!doneTasks.length) {
         scroll.innerHTML = '<div style="text-align:center;color:var(--faint);font-size:0.62rem;padding:2rem 0.5rem;line-height:2">No done tasks yet —<br>plant a task to complete it</div>';
       } else {
+        // Summary header
+        const plantedCount = doneTasks.filter(t => planted.some(p => p.id === t.id)).length;
+        const summaryEl = document.createElement('div');
+        summaryEl.style.cssText = 'text-align:center;color:var(--faint);font-size:0.52rem;padding:0.5rem 0.5rem 0.35rem;line-height:1.6;flex-shrink:0';
+        summaryEl.textContent = `${doneTasks.length} completed · ${plantedCount} planted`;
+        scroll.appendChild(summaryEl);
+
         doneTasks.forEach(task => {
           const isPlanted = planted.some(p => p.id === task.id);
           const dotColor  = tdTaskColor(task) || '#5ec45e';
           const hasSubs = task.subtasks?.length > 0;
           const isExpDone = _tdExpandedId === task.id;
           const el = document.createElement('div');
-          el.style.cssText = 'display:flex;flex-direction:column;gap:0;border-radius:7px;background:#4a7c59;border:1.5px solid #3d6b4a;overflow:hidden;';
-          const subInfo = hasSubs ? `<span style="font-size:0.46rem;color:rgba(255,255,255,0.7);margin-left:0.2rem">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>` : '';
-          const chevron = hasSubs ? `<span style="color:rgba(255,255,255,0.7);font-size:0.5rem;transition:transform 0.18s;transform:rotate(${isExpDone?'90':'0'}deg)">▶</span>` : '';
-          el.innerHTML = `<div class="todo-done-item" style="border:none;cursor:${hasSubs?'pointer':'default'}">${chevron}<div class="todo-done-dot" style="background:${dotColor}"></div><span style="flex:1">${task.title}${subInfo}</span><span style="font-size:0.5rem;color:rgba(255,255,255,0.7)">${isPlanted ? '🌱' : '✓'}</span></div>
-          ${isExpDone && hasSubs ? `<div style="padding:0.15rem 0.7rem 0.5rem;border-top:1px solid rgba(255,255,255,0.2)">
+          el.style.cssText = 'border-radius:7px;background:var(--bg2);border:1px solid var(--border);overflow:hidden;margin-bottom:0.35rem;flex-shrink:0;';
+          const subInfo = hasSubs ? `<span style="font-size:0.46rem;color:var(--faint);margin-left:0.2rem">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>` : '';
+          const chevron = hasSubs ? `<span style="color:var(--faint);font-size:0.5rem;transition:transform 0.18s;transform:rotate(${isExpDone?'90':'0'}deg)">▶</span>` : '';
+          el.innerHTML = `<div class="todo-done-item" style="border:none;cursor:${hasSubs?'pointer':'default'}">${chevron}<div class="done-check">✓</div><div class="todo-done-dot" style="background:${dotColor}"></div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${task.title}${subInfo}</span><span style="font-size:0.5rem;color:var(--faint);flex-shrink:0">${isPlanted ? '🌱' : ''}</span></div>
+          ${isExpDone && hasSubs ? `<div style="padding:0.15rem 0.7rem 0.5rem;border-top:1px solid var(--border)">
             <div class="todo-subtask-list">
               ${task.subtasks.map(sub => `
                 <div class="todo-subtask" data-sid="${sub.id}">
-                  <div class="todo-subtask-check ${sub.done?'checked':''}" data-sid="${sub.id}" data-tid="${task.id}" style="border-color:rgba(255,255,255,0.5);color:#fff">${sub.done?'✓':''}</div>
-                  <span class="todo-subtask-title ${sub.done?'done':''}" style="color:#fff;opacity:${sub.done?'0.7':'1'}">${sub.title}</span>
+                  <div class="todo-subtask-check ${sub.done?'checked':''}" data-sid="${sub.id}" data-tid="${task.id}">${sub.done?'✓':''}</div>
+                  <span class="todo-subtask-title ${sub.done?'done':''}">${sub.title}</span>
                 </div>
               `).join('')}
             </div>
             <div class="todo-subtask-progress" style="margin-top:0.25rem">
-              <div class="todo-subtask-progress-track" style="background:rgba(255,255,255,0.2)"><div class="todo-subtask-progress-fill" style="width:${Math.round(taskProgress(task)*100)}%;background:rgba(255,255,255,0.7)"></div></div>
-              <span class="todo-subtask-progress-text" style="color:rgba(255,255,255,0.7)">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>
+              <div class="todo-subtask-progress-track"><div class="todo-subtask-progress-fill" style="width:${Math.round(taskProgress(task)*100)}%"></div></div>
+              <span class="todo-subtask-progress-text">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>
             </div>
           </div>` : ''}`;
           if (hasSubs) {
@@ -3115,6 +3203,8 @@ function buildTray() {
         </div>
         ${isExpanded && !isEditing ? `
         <div class="todo-expand">
+          ${task.description ? `
+          <div style="font-size:0.52rem;color:var(--muted);line-height:1.6;margin-bottom:0.45rem;padding:0.35rem 0.5rem;background:var(--bg2);border-radius:5px;max-height:4.5rem;overflow-y:auto">${task.description.length > 200 ? task.description.slice(0,200) + '…' : task.description}</div>` : ''}
           ${!isPlanted ? `
           ${garden.azure ? `
           <div class="todo-expand-label">Assign to</div>
