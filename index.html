@@ -789,7 +789,8 @@ function tdApplyGarden() {
         const outData = planted.map(p => ({
           id: p.id, title: p.title, type: p.type, owner: p.owner,
           state: p.state, priority: p.priority, sprint: p.sprint, seed: p.seed,
-          color: p.color, size: p.size, dueDate: p.dueDate || null,
+          color: p.color || null, memberColor: p.memberColor || null,
+          size: p.size, dueDate: p.dueDate || null,
           x: p.x, y: p.y, plantedAt: p.plantedAt
         }));
         localStorage.setItem(_tdLoadedGardenKey, JSON.stringify({ data: outData, ts: Date.now() }));
@@ -847,10 +848,56 @@ function tdApplyGarden() {
       planted: false
     }));
 
+  // Auto-plant any done tasks that don't have a flower yet
+  autoPlantDoneTasks(garden);
+
   cancelPlanting();
   document.getElementById('n-planted').textContent = planted.length;
   updateDropHint();
   buildTray();
+}
+
+// ── Auto-plant done tasks that have no flower on canvas ──
+function autoPlantDoneTasks(garden) {
+  if (!garden) return;
+  const plantedIds = new Set(planted.map(p => p.id));
+  const unplantedDone = garden.tasks.filter(t => t.done && !plantedIds.has(t.id));
+  if (!unplantedDone.length) return;
+
+  // Find a cluster center: near existing plants or at origin
+  let cx = 0, cy = 0;
+  if (planted.length) {
+    cx = planted.reduce((s, p) => s + p.x, 0) / planted.length;
+    cy = planted.reduce((s, p) => s + p.y, 0) / planted.length;
+  }
+
+  // Spread in a grid pattern, offset from center
+  const spacing = 55;
+  const cols = Math.ceil(Math.sqrt(unplantedDone.length));
+  const startX = cx - (cols - 1) * spacing / 2;
+  const startY = cy + (planted.length ? 70 : 0); // below existing plants
+
+  unplantedDone.forEach((task, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const jitterX = (Math.random() - 0.5) * 18;
+    const jitterY = (Math.random() - 0.5) * 18;
+    const mc = task.assignedTo && garden.azure ? azureMemberColor(garden, task.assignedTo) : (task.memberColor || null);
+    planted.push({
+      id: task.id, title: task.title, type: 'task', owner: 'Me',
+      state: 'Done', priority: 'medium', sprint: garden.name,
+      seed: Math.abs(task.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) || i + 1,
+      color: task.color || null,
+      memberColor: mc,
+      size: task.size || 'medium',
+      dueDate: task.dueDate || null,
+      x: startX + col * spacing + jitterX,
+      y: startY + row * spacing + jitterY,
+      plantedAt: Date.now() - 30000, // appear already grown
+      planted: true
+    });
+  });
+  if (unplantedDone.length) saveGarden();
 }
 
 // ── Convenience: set garden (user picked from dropdown) ──
@@ -859,6 +906,8 @@ function tdSetGarden(id) {
   tdSaveSel();
   tdRepopulateBar();
   tdApplyGarden();
+  // Center camera on garden switch
+  cam.x = 0; cam.y = 0; cam.zoom = 1; clampCam();
 }
 
 // ── CRUD: Garden ──
@@ -882,7 +931,7 @@ function tdTrayAddTask() {
   if (!garden) return;
   const newId = tdUID();
   const taskColor = garden.monday ? 'blue' : garden.azure ? null : 'red';
-  garden.tasks.push({ id: newId, title, done: false, color: taskColor });
+  garden.tasks.unshift({ id: newId, title, done: false, color: taskColor });
   _tdNewTaskIds.add(newId);
   tdSave();
   input.value = '';
@@ -1340,6 +1389,7 @@ async function mondayAutoSync(garden) {
     if (parsed.subitemBoardId) garden.monday.subitemBoardId = parsed.subitemBoardId;
     mondayMergeTasks(garden, parsed);
     garden.monday.lastSync = Date.now();
+    autoPlantDoneTasks(garden);
     tdSave(); buildTray();
     setStatus('ok', 'Monday synced');
     setTimeout(() => { document.getElementById('status-row').style.display = 'none'; }, 2000);
@@ -1739,6 +1789,7 @@ async function azureAutoSync(garden) {
     const tasks = azureItemsToTasks(items, garden);
     azureMergeTasks(garden, tasks);
     garden.azure.lastSync = Date.now();
+    autoPlantDoneTasks(garden);
     tdSave(); buildTray();
     setStatus('ok', 'Azure synced');
     setTimeout(() => { document.getElementById('status-row').style.display = 'none'; }, 2000);
@@ -2607,7 +2658,7 @@ function uprootPlant(p) {
   const idx = planted.indexOf(p);
   if (idx === -1) return;
   planted.splice(idx, 1);
-  plantChains.delete(p.seed);
+  plantChains.delete(p.id || p.seed);
   saveGarden();
   spawnConfetti(p.x, p.y);
 
@@ -2719,11 +2770,22 @@ cv.addEventListener('mousemove', e => {
       ? `display:inline-block;width:9px;height:9px;border-radius:50%;background:${_hitTaskColor};flex-shrink:0`
       : `display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--border2);flex-shrink:0`;
     const _sizeLabel = hit.size || 'medium';
+    const _garden = tdGetGarden();
+    const _hitTask = _garden?.tasks.find(t => t.id === hit.id);
+    const _assignee = _hitTask?.assignedTo || null;
+    const _assigneeHtml = _assignee ? (()=>{
+      const ini = _assignee.split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      const col = hit.memberColor || '#7A7574';
+      return `<div style="display:flex;align-items:center;gap:0.3rem;margin-top:0.25rem">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:${col};color:#fff;font-size:0.38rem;font-weight:700;font-family:'DM Mono',monospace;flex-shrink:0">${ini}</span>
+        <span style="font-size:0.52rem;color:var(--muted)">${_assignee}</span>
+      </div>`;
+    })() : '';
     ttEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.4rem">
         <span style="${_dotStyle}"></span>
         <span class="ttl" style="margin:0">${hit.title}</span>
         <span style="font-size:0.48rem;color:var(--faint);flex-shrink:0">${_sizeLabel}</span>
-      </div>`;
+      </div>${_assigneeHtml}`;
     ttEl.classList.add('on');
     ttEl.style.left = Math.min(e.clientX+14,window.innerWidth-220)+'px';
     ttEl.style.top  = (e.clientY-12)+'px';
@@ -3436,10 +3498,11 @@ let lastPlantPos  = { x: 0, y: 0 };
 let hoveredPlant  = null;
 
 function getChain(p) {
-  if (!plantChains.has(p.seed)) {
-    plantChains.set(p.seed, Array.from({length: CHAIN_SEGS}, () => ({ angle: 0, vel: 0 })));
+  const key = p.id || p.seed;
+  if (!plantChains.has(key)) {
+    plantChains.set(key, Array.from({length: CHAIN_SEGS}, () => ({ angle: 0, vel: 0 })));
   }
-  return plantChains.get(p.seed);
+  return plantChains.get(key);
 }
 
 // Step chain physics every frame
