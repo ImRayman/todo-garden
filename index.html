@@ -330,6 +330,21 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 .login-title { font-size:1rem;font-weight:500;margin-bottom:0.4rem; }
 .login-sub { font-size:0.65rem;color:var(--muted);line-height:1.7;margin-bottom:1.6rem; }
 #login-err { font-size:0.58rem;color:#c06050;margin-top:0.6rem;display:none; }
+
+/* ── Monday modal ── */
+.monday-overlay { position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center; }
+.monday-modal { background:var(--card);border:1px solid var(--border);border-radius:10px;padding:2rem 2.2rem;max-width:380px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,0.1);font-family:'DM Mono',monospace; }
+.monday-modal h3 { font-size:0.82rem;font-weight:500;margin-bottom:0.2rem; }
+.monday-modal .monday-sub { font-size:0.56rem;color:var(--muted);margin-bottom:0.8rem;line-height:1.6; }
+.monday-modal input[type="password"] { width:100%;font-family:'DM Mono',monospace;font-size:0.62rem;padding:0.45rem 0.6rem;border:1px solid var(--border);border-radius:5px;background:var(--bg2);outline:none;margin-bottom:0.4rem; }
+.monday-modal input[type="password"]:focus { border-color:var(--accent); }
+.monday-modal .monday-err { color:#c06050;font-size:0.54rem;min-height:1rem;margin-bottom:0.3rem; }
+.monday-modal .monday-btns { display:flex;gap:0.4rem; }
+.monday-board-list { max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:5px;margin-bottom:0.5rem; }
+.monday-board-item { padding:0.5rem 0.7rem;font-size:0.62rem;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s; }
+.monday-board-item:last-child { border-bottom:none; }
+.monday-board-item:hover { background:var(--accent-bg); }
+.monday-badge { font-size:0.46rem;color:var(--muted);margin-left:0.3rem; }
 </style>
 </head>
 <body>
@@ -392,6 +407,7 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
           <div class="garden-title-actions">
             <button class="tsh-btn" id="tray-ren-garden" onclick="event.stopPropagation();tdStartRename()" title="Rename">✎</button>
             <button class="tsh-btn tsh-del" id="tray-del-garden" onclick="event.stopPropagation();tdDeleteGarden()" title="Delete garden">✕</button>
+            <button class="tsh-btn tsh-del" id="tray-monday-disconnect" onclick="event.stopPropagation();mondayDisconnect()" title="Disconnect Monday" style="display:none">⚡✕</button>
           </div>
         </div>
         <!-- Inline rename -->
@@ -411,6 +427,8 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
           <button class="ok" onclick="tdConfirmCreateGarden()">Create</button>
           <button onclick="tdHideCreateGarden()">✕</button>
         </div>
+        <!-- Monday sync button -->
+        <button class="btn" id="monday-sync-btn" onclick="mondayManualSync()" style="display:none;width:100%;font-size:0.54rem;padding:0.3rem;margin-bottom:0.4rem;color:var(--muted)">⚡ Sync with Monday</button>
         <!-- Progress bar -->
         <div class="garden-progress" id="tray-progress-row" style="display:none">
           <div class="garden-progress-info">
@@ -456,6 +474,11 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 <div id="td-drag-ghost">🌱</div>
 
 <div class="tt" id="tt"></div>
+
+<!-- Monday connect modal -->
+<div class="monday-overlay" id="monday-modal" style="display:none">
+  <div class="monday-modal" id="monday-modal-content"></div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════
@@ -548,16 +571,30 @@ function loginTodo() {
   ['user-area','bar-chip-seeds','bar-chip-planted']
     .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
 
-  // add sign-out to bar if not already there
-  if (!document.getElementById('td-signout-btn')) {
+  // add bar-right buttons if not already there
+  if (!document.getElementById('td-bar-right')) {
     const bar = document.getElementById('bar');
-    const btn = document.createElement('button');
-    btn.id = 'td-signout-btn';
-    btn.className = 'btn';
-    btn.style.cssText = 'font-size:0.58rem;margin-left:auto';
-    btn.textContent = 'sign out';
-    btn.onclick = logout;
-    bar.appendChild(btn);
+    const wrap = document.createElement('div');
+    wrap.id = 'td-bar-right';
+    wrap.style.cssText = 'margin-left:auto;display:flex;gap:0.4rem;align-items:center';
+
+    const mondayBtn = document.createElement('button');
+    mondayBtn.id = 'td-monday-btn';
+    mondayBtn.className = 'btn';
+    mondayBtn.style.cssText = 'font-size:0.58rem';
+    mondayBtn.textContent = '\u26A1 Monday';
+    mondayBtn.onclick = mondayShowConnect;
+
+    const signOutBtn = document.createElement('button');
+    signOutBtn.id = 'td-signout-btn';
+    signOutBtn.className = 'btn';
+    signOutBtn.style.cssText = 'font-size:0.58rem';
+    signOutBtn.textContent = 'sign out';
+    signOutBtn.onclick = logout;
+
+    wrap.appendChild(mondayBtn);
+    wrap.appendChild(signOutBtn);
+    bar.appendChild(wrap);
   }
 
   // Auto-create default garden on first launch
@@ -590,6 +627,20 @@ function tdRepopulateBar() {
   const delBtn = document.getElementById('tray-del-garden');
   if (delBtn) delBtn.style.display = tdData.gardens.length > 1 ? '' : 'none';
 
+  // Show/hide Monday disconnect button + sync button
+  const mondayDisBtn = document.getElementById('tray-monday-disconnect');
+  if (mondayDisBtn) mondayDisBtn.style.display = garden?.monday ? '' : 'none';
+  const mondaySyncBtn = document.getElementById('monday-sync-btn');
+  if (mondaySyncBtn) mondaySyncBtn.style.display = garden?.monday ? '' : 'none';
+
+  // Update Monday button state
+  const mondayBtn = document.getElementById('td-monday-btn');
+  if (mondayBtn) {
+    const hasMon = tdData.gardens.some(g => g.monday);
+    mondayBtn.textContent = hasMon ? '\u26A1 Monday \u2713' : '\u26A1 Monday';
+    mondayBtn.style.color = hasMon ? 'var(--accent)' : '';
+  }
+
   // Rebuild dropdown list
   tdRebuildDropdownList();
 }
@@ -601,7 +652,7 @@ function tdRebuildDropdownList() {
   tdData.gardens.forEach(g => {
     const item = document.createElement('div');
     item.className = 'garden-dropdown-item' + (g.id === tdGardenId ? ' active' : '');
-    item.textContent = g.name;
+    item.innerHTML = g.name + (g.monday ? '<span class="monday-badge">\u26A1</span>' : '');
     item.onclick = (e) => { e.stopPropagation(); tdSetGarden(g.id); tdCloseGardenDropdown(); };
     list.appendChild(item);
   });
@@ -710,6 +761,11 @@ function tdApplyGarden() {
 
   const switching = _tdLoadedGardenKey !== gkey;
 
+  // Auto-sync Monday garden on switch
+  if (garden.monday && switching) {
+    mondayAutoSync(garden);
+  }
+
   if (switching) {
     // Save outgoing garden's live canvas before clearing
     if (_tdLoadedGardenKey) {
@@ -790,6 +846,7 @@ function tdSetGarden(id) {
 function tdDeleteGarden() {
   if (tdData.gardens.length <= 1) return; // can't delete last garden
   const garden = tdGetGarden(); if (!garden) return;
+  if (garden.monday) { mondayDisconnect(); return; }
   if (!confirm(`Delete "${garden.name}" and all its tasks?`)) return;
   tdData.gardens = tdData.gardens.filter(g => g.id !== tdGardenId);
   tdGardenId = tdData.gardens[0]?.id || null;
@@ -805,12 +862,14 @@ function tdTrayAddTask() {
   const garden = tdGetGarden();
   if (!garden) return;
   const newId = tdUID();
-  garden.tasks.push({ id: newId, title, done: false, color: 'red' });
+  garden.tasks.push({ id: newId, title, done: false, color: garden.monday ? 'blue' : 'red' });
   _tdNewTaskIds.add(newId);
   tdSave();
   input.value = '';
   input.focus();
   tdApplyGarden();   // re-sync seeds + rebuild tray
+  // Monday sync: create item on board
+  if (garden.monday) mondayCreateTaskAsync(garden, newId, title);
 }
 function tdToggleTask(taskId, done) {
   const garden = tdGetGarden(); if (!garden) return;
@@ -818,13 +877,25 @@ function tdToggleTask(taskId, done) {
   task.done = done;
   if (!done) planted = planted.filter(p => p.id !== taskId);
   tdSave(); tdApplyGarden(); saveGarden();
+  // Monday sync: complete or reset item
+  if (garden.monday && task.mondayItemId) {
+    (done
+      ? mondayCompleteItem(garden.monday.token, garden.monday.boardId, task.mondayItemId, garden.monday.statusColumnId)
+      : mondayResetItem(garden.monday.token, garden.monday.boardId, task.mondayItemId, garden.monday.statusColumnId)
+    ).catch(e => console.error('Monday status error:', e));
+  }
 }
 function tdDeleteTask(taskId) {
   const garden = tdGetGarden(); if (!garden) return;
   if (selectedSeed?.id === taskId) cancelPlanting();
+  const task = garden.tasks.find(t => t.id === taskId);
   garden.tasks = garden.tasks.filter(t => t.id !== taskId);
   planted = planted.filter(p => p.id !== taskId);
   tdSave(); tdApplyGarden(); saveGarden();
+  // Monday sync: delete item
+  if (garden.monday && task?.mondayItemId) {
+    mondayDeleteItem(garden.monday.token, task.mondayItemId).catch(e => console.error('Monday delete error:', e));
+  }
 }
 
 // ── Subtask helpers ──
@@ -836,14 +907,40 @@ function tdAddSubtask(taskId, title) {
   const garden = tdGetGarden(); if (!garden) return;
   const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
   if (!task.subtasks) task.subtasks = [];
-  task.subtasks.push({ id: tdUID(), title, done: false });
+  const subId = tdUID();
+  task.subtasks.push({ id: subId, title, done: false });
   tdSave(); saveGarden(); buildTray();
+  // Monday sync: create subitem
+  if (garden.monday && task.mondayItemId) {
+    mondayCreateSubitem(garden.monday.token, task.mondayItemId, title)
+      .then(result => {
+        const sub = task.subtasks.find(s => s.id === subId);
+        if (sub) { sub.mondaySubitemId = result.id; tdSave(); }
+        // Capture subitem board ID and status column if not yet known
+        if (result.board?.id && !garden.monday.subitemBoardId) {
+          garden.monday.subitemBoardId = result.board.id;
+          const sc = result.board.columns?.find(c => c.type === 'status');
+          if (sc) garden.monday.subitemStatusColumnId = sc.id;
+          tdSave();
+        }
+      })
+      .catch(e => console.error('Monday subitem create error:', e));
+  }
 }
 function tdToggleSubtask(taskId, subtaskId) {
   const garden = tdGetGarden(); if (!garden) return;
   const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
   const sub = task.subtasks?.find(s => s.id === subtaskId); if (!sub) return;
   sub.done = !sub.done;
+  // Monday sync: complete or reset subitem (subitems use their own board + status column)
+  if (garden.monday && sub.mondaySubitemId) {
+    const subColId = garden.monday.subitemStatusColumnId || 'status';
+    const subBoardId = garden.monday.subitemBoardId;
+    (sub.done
+      ? mondayCompleteSubitem(garden.monday.token, subBoardId, sub.mondaySubitemId, subColId)
+      : mondayResetSubitem(garden.monday.token, subBoardId, sub.mondaySubitemId, subColId)
+    ).catch(e => console.error('Monday subitem status error:', e));
+  }
   // Wiggle the flower on subtask change
   const pp = planted.find(p => p.id === taskId);
   if (pp) kickSpring(pp, 0.6 + Math.random() * 0.5);
@@ -852,6 +949,10 @@ function tdToggleSubtask(taskId, subtaskId) {
   const allDone = task.subtasks.every(s => s.done);
   if (allDone && isTaskPlanted && !task.done) {
     task.done = true;
+    // Monday sync: auto-complete when all subtasks done
+    if (garden.monday && task.mondayItemId) {
+      mondayCompleteItem(garden.monday.token, garden.monday.boardId, task.mondayItemId, garden.monday.statusColumnId).catch(e => console.error('Monday complete error:', e));
+    }
     tdSave(); saveGarden();
     // Play completion animation
     const card = document.querySelector(`.todo-task[data-tid="${taskId}"]`);
@@ -872,8 +973,13 @@ function tdToggleSubtask(taskId, subtaskId) {
 function tdDeleteSubtask(taskId, subtaskId) {
   const garden = tdGetGarden(); if (!garden) return;
   const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
+  const sub = (task.subtasks || []).find(s => s.id === subtaskId);
   task.subtasks = (task.subtasks || []).filter(s => s.id !== subtaskId);
   tdSave(); saveGarden(); buildTray();
+  // Monday sync: delete subitem
+  if (garden.monday && sub?.mondaySubitemId) {
+    mondayDeleteItem(garden.monday.token, sub.mondaySubitemId).catch(e => console.error('Monday delete subitem error:', e));
+  }
 }
 let _tdAddingSubtaskFor = null; // task ID currently showing subtask input
 
@@ -890,7 +996,14 @@ function tdConfirmEditTask(taskId) {
   const garden = tdGetGarden(); if (!garden) return;
   const task = garden.tasks.find(t => t.id === taskId); if (!task) return;
   const name = (input?.value || '').trim();
-  if (name) { task.title = name; tdSave(); }
+  if (name) {
+    task.title = name; tdSave();
+    // Monday sync: rename item or subitem
+    if (garden.monday) {
+      const mondayId = task.mondayItemId || task.mondaySubitemId;
+      if (mondayId) mondayRenameItem(garden.monday.token, mondayId, name).catch(e => console.error('Monday rename error:', e));
+    }
+  }
   _tdEditingTaskId = null;
   tdApplyGarden();
 }
@@ -907,7 +1020,308 @@ function tdSyncSeeds()  {}
 function tdLoadGarden() {}
 function tdRefreshBar() { tdRepopulateBar(); }
 
+// ══════════════════════════════════════
+// MONDAY.COM INTEGRATION
+// ══════════════════════════════════════
+const MONDAY_API_URL = 'https://api.monday.com/v2';
+const MONDAY_TOKEN_KEY = 'tg_monday_token';
 
+function isMondayGarden(garden) { return !!(garden?.monday); }
+
+// ── API helpers ──
+async function mondayAPI(token, query) {
+  const resp = await fetch(MONDAY_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': token, 'API-Version': '2024-10' },
+    body: JSON.stringify({ query })
+  });
+  if (!resp.ok) throw new Error('Monday API error: ' + resp.status);
+  const json = await resp.json();
+  if (json.errors?.length) throw new Error(json.errors[0].message);
+  return json.data;
+}
+
+async function mondayValidateToken(token) {
+  const data = await mondayAPI(token, '{ me { id name } }');
+  return data.me;
+}
+
+async function mondayGetBoards(token) {
+  const data = await mondayAPI(token, '{ boards(limit:50) { id name } }');
+  return data.boards || [];
+}
+
+async function mondayGetItems(token, boardId) {
+  const data = await mondayAPI(token, `{ boards(ids: [${boardId}]) { columns { id type } items_page(limit:200) { items { id name column_values { id text value type } subitems { id name board { id } column_values { id text value type } } } } } }`);
+  const board = data.boards[0];
+  return { items: board?.items_page?.items || [], columns: board?.columns || [] };
+}
+
+async function mondayCreateItem(token, boardId, title) {
+  const safe = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const data = await mondayAPI(token, `mutation { create_item(board_id: ${boardId}, item_name: "${safe}") { id } }`);
+  return data.create_item.id;
+}
+
+async function mondayCompleteItem(token, boardId, itemId, statusColumnId) {
+  const val = JSON.stringify(JSON.stringify({ label: 'Done' }));
+  await mondayAPI(token, `mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${statusColumnId}", value: ${val}) { id } }`);
+}
+
+async function mondayResetItem(token, boardId, itemId, statusColumnId) {
+  const val = JSON.stringify(JSON.stringify({}));
+  await mondayAPI(token, `mutation { change_column_value(board_id: ${boardId}, item_id: ${itemId}, column_id: "${statusColumnId}", value: ${val}) { id } }`);
+}
+
+async function mondayCreateSubitem(token, parentItemId, title) {
+  const safe = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const data = await mondayAPI(token, `mutation { create_subitem(parent_item_id: ${parentItemId}, item_name: "${safe}") { id board { id columns { id type } } } }`);
+  return data.create_subitem;
+}
+
+async function mondayCompleteSubitem(token, subitemBoardId, subitemId, statusColumnId) {
+  if (!subitemBoardId) { console.warn('mondayCompleteSubitem: no subitemBoardId, skipping'); return; }
+  const val = JSON.stringify(JSON.stringify({ label: 'Done' }));
+  await mondayAPI(token, `mutation { change_column_value(board_id: ${subitemBoardId}, item_id: ${subitemId}, column_id: "${statusColumnId}", value: ${val}) { id } }`);
+}
+
+async function mondayResetSubitem(token, subitemBoardId, subitemId, statusColumnId) {
+  if (!subitemBoardId) { console.warn('mondayResetSubitem: no subitemBoardId, skipping'); return; }
+  const val = JSON.stringify(JSON.stringify({}));
+  await mondayAPI(token, `mutation { change_column_value(board_id: ${subitemBoardId}, item_id: ${subitemId}, column_id: "${statusColumnId}", value: ${val}) { id } }`);
+}
+
+async function mondayDeleteItem(token, itemId) {
+  await mondayAPI(token, `mutation { delete_item(item_id: ${itemId}) { id } }`);
+}
+
+async function mondayRenameItem(token, itemId, newTitle) {
+  const safe = newTitle.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  await mondayAPI(token, `mutation { change_simple_column_value(item_id: ${itemId}, column_id: "name", value: "${safe}") { id } }`);
+}
+
+function mondayItemsToTasks(items) {
+  const result = { tasks: [], subitemStatusColumnId: null, subitemBoardId: null };
+  result.tasks = items.map(item => {
+    const statusCol = item.column_values.find(c => c.type === 'status' || c.id === 'status');
+    const isDone = statusCol?.text?.toLowerCase() === 'done';
+    const subtasks = (item.subitems || []).map(sub => {
+      const subStatus = sub.column_values?.find(c => c.type === 'status');
+      if (subStatus && !result.subitemStatusColumnId) result.subitemStatusColumnId = subStatus.id;
+      if (sub.board?.id && !result.subitemBoardId) result.subitemBoardId = sub.board.id;
+      return { id: 'mon_sub_' + sub.id, title: sub.name, done: subStatus?.text?.toLowerCase() === 'done', mondaySubitemId: sub.id };
+    });
+    return {
+      id: 'mon_' + item.id, title: item.name, done: isDone,
+      color: 'blue', size: 'medium', mondayItemId: item.id,
+      subtasks: subtasks.length ? subtasks : undefined
+    };
+  });
+  return result;
+}
+
+// ── Modal UI ──
+function mondayShowConnect() {
+  const modal = document.getElementById('monday-modal');
+  modal.style.display = 'flex';
+  const content = document.getElementById('monday-modal-content');
+  const savedToken = localStorage.getItem(MONDAY_TOKEN_KEY) || '';
+  content.innerHTML = `
+    <h3>Connect to Monday.com</h3>
+    <div class="monday-sub">Enter your Personal API Token.<br>Find it in Monday \u2192 Avatar \u2192 Developers \u2192 My Access Tokens.</div>
+    <input id="monday-token-input" type="password" placeholder="eyJhbGci..." value="${savedToken}"/>
+    <div class="monday-err" id="monday-modal-error"></div>
+    <div class="monday-btns">
+      <button class="btn" style="background:var(--accent);color:white;border-color:var(--accent)" onclick="mondayValidateAndNext()" id="monday-connect-btn">Connect</button>
+      <button class="btn" onclick="mondayCloseModal()">Cancel</button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('monday-token-input')?.focus(), 50);
+}
+
+async function mondayValidateAndNext() {
+  const input = document.getElementById('monday-token-input');
+  const errEl = document.getElementById('monday-modal-error');
+  const btn = document.getElementById('monday-connect-btn');
+  const token = (input?.value || '').trim();
+  if (!token) { errEl.textContent = 'Please enter a token.'; return; }
+  btn.disabled = true; btn.textContent = 'Validating...';
+  errEl.textContent = '';
+  try {
+    const me = await mondayValidateToken(token);
+    localStorage.setItem(MONDAY_TOKEN_KEY, token);
+    const boards = await mondayGetBoards(token);
+    mondayShowBoardStep(token, boards, me);
+  } catch (e) {
+    errEl.textContent = 'Invalid token or API error: ' + e.message;
+    btn.disabled = false; btn.textContent = 'Connect';
+  }
+}
+
+function mondayShowBoardStep(token, boards, me) {
+  const content = document.getElementById('monday-modal-content');
+  content.innerHTML = `
+    <h3>Select a Board</h3>
+    <div class="monday-sub">Connected as <b>${me.name}</b>. Choose a board to sync:</div>
+    <div class="monday-board-list" id="monday-board-list">
+      ${boards.map(b => `<div class="monday-board-item" data-bid="${b.id}" data-bname="${b.name.replace(/"/g, '&quot;')}">${b.name}</div>`).join('')}
+    </div>
+    <div class="monday-err" id="monday-modal-error"></div>
+    <div class="monday-btns">
+      <button class="btn" onclick="mondayShowConnect()">Back</button>
+      <button class="btn" onclick="mondayCloseModal()">Cancel</button>
+    </div>
+  `;
+  document.querySelectorAll('.monday-board-item').forEach(el => {
+    el.addEventListener('click', () => mondaySelectBoard(token, el.dataset.bid, el.dataset.bname));
+  });
+}
+
+async function mondaySelectBoard(token, boardId, boardName) {
+  const errEl = document.getElementById('monday-modal-error');
+  try {
+    errEl.textContent = 'Syncing board...';
+    const { items, columns } = await mondayGetItems(token, boardId);
+    const parsed = mondayItemsToTasks(items);
+    // Detect status column from board columns definition (works even for empty boards)
+    const statusCol = columns.find(c => c.type === 'status');
+    const statusColumnId = statusCol ? statusCol.id : 'status';
+
+    // Check if a garden for this board already exists — reuse instead of duplicating
+    const existingGarden = tdData.gardens.find(g => g.monday && g.monday.boardId === boardId);
+    if (existingGarden) {
+      existingGarden.name = boardName || existingGarden.name;
+      existingGarden.monday.token = token;
+      existingGarden.monday.statusColumnId = statusColumnId;
+      if (parsed.subitemStatusColumnId) existingGarden.monday.subitemStatusColumnId = parsed.subitemStatusColumnId;
+      if (parsed.subitemBoardId) existingGarden.monday.subitemBoardId = parsed.subitemBoardId;
+      existingGarden.monday.lastSync = Date.now();
+      // Merge tasks: update existing, add new, remove deleted
+      mondayMergeTasks(existingGarden, parsed);
+      tdSave();
+      tdGardenId = existingGarden.id;
+      tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
+      mondayCloseModal();
+      return;
+    }
+
+    const gardenId = tdUID();
+    const garden = {
+      id: gardenId, name: boardName || 'My Monday Workspace', tasks: parsed.tasks,
+      monday: { token, boardId, boardName, statusColumnId, subitemStatusColumnId: parsed.subitemStatusColumnId || 'status', subitemBoardId: parsed.subitemBoardId, lastSync: Date.now() }
+    };
+    tdData.gardens.push(garden);
+    tdSave();
+    tdGardenId = gardenId;
+    tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
+    mondayCloseModal();
+  } catch (e) {
+    errEl.textContent = 'Error syncing: ' + e.message;
+  }
+}
+
+function mondayCloseModal() {
+  document.getElementById('monday-modal').style.display = 'none';
+}
+
+// ── Shared merge logic for sync ──
+function mondayMergeTasks(garden, parsed) {
+  const remoteById = new Map(parsed.tasks.map(t => [t.id, t]));
+  const remoteByMondayId = new Map(parsed.tasks.map(t => [t.mondayItemId, t]));
+  const matchedMondayIds = new Set();
+  // Update existing and add new
+  for (const [id, remote] of remoteById) {
+    // Match by task ID, or by mondayItemId for locally-created tasks
+    let local = garden.tasks.find(t => t.id === id);
+    if (!local) local = garden.tasks.find(t => t.mondayItemId && t.mondayItemId === remote.mondayItemId);
+    if (local) {
+      local.title = remote.title;
+      local.done = remote.done;
+      if (!local.mondayItemId) local.mondayItemId = remote.mondayItemId;
+      matchedMondayIds.add(remote.mondayItemId);
+      if (remote.subtasks) {
+        const localSubs = new Map((local.subtasks || []).map(s => [s.id, s]));
+        const localSubsByMondayId = new Map((local.subtasks || []).filter(s => s.mondaySubitemId).map(s => [s.mondaySubitemId, s]));
+        local.subtasks = remote.subtasks.map(rs => {
+          let ls = localSubs.get(rs.id);
+          if (!ls) ls = localSubsByMondayId.get(rs.mondaySubitemId);
+          if (ls) {
+            return { ...ls, title: rs.title, done: rs.done || ls.done, mondaySubitemId: rs.mondaySubitemId || ls.mondaySubitemId };
+          }
+          return rs;
+        });
+      }
+    } else {
+      garden.tasks.push(remote);
+      matchedMondayIds.add(remote.mondayItemId);
+    }
+  }
+  // Remove items deleted from Monday (keep locally-created ones without mondayItemId)
+  garden.tasks = garden.tasks.filter(t => !t.mondayItemId || remoteByMondayId.has(t.mondayItemId));
+}
+
+// ── Auto-sync ──
+let _mondaySyncing = false;
+async function mondayAutoSync(garden) {
+  if (!garden.monday || _mondaySyncing) return;
+  _mondaySyncing = true;
+  const { token, boardId } = garden.monday;
+  setStatus('ok', 'Syncing Monday...');
+  try {
+    const { items, columns } = await mondayGetItems(token, boardId);
+    const parsed = mondayItemsToTasks(items);
+    // Update status column from board definition
+    const statusCol = columns.find(c => c.type === 'status');
+    if (statusCol) garden.monday.statusColumnId = statusCol.id;
+    if (parsed.subitemStatusColumnId) garden.monday.subitemStatusColumnId = parsed.subitemStatusColumnId;
+    if (parsed.subitemBoardId) garden.monday.subitemBoardId = parsed.subitemBoardId;
+    mondayMergeTasks(garden, parsed);
+    garden.monday.lastSync = Date.now();
+    tdSave(); buildTray();
+    setStatus('ok', 'Monday synced');
+    setTimeout(() => { document.getElementById('status-row').style.display = 'none'; }, 2000);
+  } catch (e) {
+    setStatus('err', 'Monday sync failed');
+    console.error('Monday sync error:', e);
+  }
+  _mondaySyncing = false;
+}
+
+// ── Manual sync ──
+function mondayManualSync() {
+  const garden = tdGetGarden();
+  if (!garden?.monday) return;
+  const btn = document.getElementById('monday-sync-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⚡ Syncing...'; }
+  _mondaySyncing = false; // allow re-sync
+  mondayAutoSync(garden).finally(() => {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Sync with Monday'; }
+  });
+}
+
+// ── Disconnect ──
+function mondayDisconnect() {
+  const garden = tdGetGarden();
+  if (!garden?.monday) return;
+  if (!confirm('Disconnect "' + garden.name + '" from Monday.com? The garden will be removed.')) return;
+  const gkey = gardenKey();
+  tdData.gardens = tdData.gardens.filter(g => g.id !== garden.id);
+  try { localStorage.removeItem(gkey); } catch(e){}
+  tdGardenId = tdData.gardens[0]?.id || null;
+  planted = [];
+  tdSave(); tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
+  if (!tdData.gardens.some(g => g.monday)) localStorage.removeItem(MONDAY_TOKEN_KEY);
+}
+
+// ── Async create task helper ──
+async function mondayCreateTaskAsync(garden, localTaskId, title) {
+  try {
+    const { token, boardId } = garden.monday;
+    const mondayId = await mondayCreateItem(token, boardId, title);
+    const task = garden.tasks.find(t => t.id === localTaskId);
+    if (task) { task.mondayItemId = mondayId; tdSave(); }
+  } catch (e) { console.error('Failed to create Monday item:', e); }
+}
 
 
 function updateDropHint() {
@@ -1715,7 +2129,14 @@ function uprootPlant(p) {
   const garden = tdGetGarden();
   if (garden) {
     const task = garden.tasks.find(t => t.id === p.id);
-    if (task) { task.done = false; tdSave(); }
+    if (task) {
+      task.done = false; tdSave();
+      // Monday sync: reset status back from Done
+      if (garden.monday && task.mondayItemId) {
+        mondayResetItem(garden.monday.token, garden.monday.boardId, task.mondayItemId, garden.monday.statusColumnId)
+          .catch(e => console.error('Monday reset error:', e));
+      }
+    }
   }
   // rebuild tray so seeds array and DOM card exist
   tdApplyGarden();
@@ -1839,6 +2260,13 @@ function plantAt(x, y) {
     if (task) {
       const allSubsDone = !task.subtasks?.length || task.subtasks.every(s => s.done);
       if (allSubsDone) task.done = true;
+      // Monday sync: mark as completed when planted
+      if (garden.monday) {
+        console.log('Plant sync check:', { hasMondayItemId: !!task.mondayItemId, mondayItemId: task.mondayItemId, done: task.done });
+        if (task.mondayItemId && task.done) {
+          mondayCompleteItem(garden.monday.token, garden.monday.boardId, task.mondayItemId, garden.monday.statusColumnId).catch(e => console.error('Monday complete error:', e));
+        }
+      }
       tdSave();
       const taskId = selectedSeed.id;
       cancelPlanting();
