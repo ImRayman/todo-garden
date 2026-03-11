@@ -336,11 +336,7 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 .td-task:hover .td-task-del { opacity:1; }
 .td-seed-badge { font-size:0.52rem;background:#5ec45e22;color:#3a8a28;border:1px solid #5ec45e55;border-radius:3px;padding:0.1rem 0.3rem;white-space:nowrap; }
 
-.login-card { background:var(--card);border:1px solid var(--border);border-radius:10px;padding:2.5rem 2.8rem;text-align:center;max-width:340px;box-shadow:0 4px 24px rgba(0,0,0,0.06); }
-.login-icon { font-size:2.2rem;margin-bottom:1rem; }
-.login-title { font-size:1rem;font-weight:500;margin-bottom:0.4rem; }
-.login-sub { font-size:0.65rem;color:var(--muted);line-height:1.7;margin-bottom:1.6rem; }
-#login-err { font-size:0.58rem;color:#c06050;margin-top:0.6rem;display:none; }
+#login-cv { position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer; }
 
 /* ── Sync modal (shared by Monday + Azure) ── */
 .sync-overlay { position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center; }
@@ -398,18 +394,8 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 </div>
 
 <!-- Login -->
-<div class="login-screen" id="login-screen" style="position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:var(--bg)">
-  <div class="login-card">
-    <div class="login-icon">🌱</div>
-    <div class="login-title">Todo Garden</div>
-    <div class="login-sub">Plant your tasks. Watch your garden grow.</div>
-
-    <button class="btn primary" onclick="loginTodo()" style="width:100%;justify-content:center;padding:0.5rem;gap:0.5rem">
-      <span style="font-size:1rem">🌿</span> Start
-    </button>
-
-    <div id="login-err"></div>
-  </div>
+<div class="login-screen" id="login-screen" style="position:fixed;inset:0;z-index:300;background:var(--bg)">
+  <canvas id="login-cv"></canvas>
 </div>
 
 <!-- Main app -->
@@ -582,8 +568,477 @@ function tdGetGarden() {
   return tdData.gardens.find(g => g.id === tdGardenId) || null;
 }
 
+// ══════════════════════════════════════════════
+// LOGIN SCREEN CANVAS
+// ══════════════════════════════════════════════
+(function() {
+  const lcv = document.getElementById('login-cv');
+  if (!lcv) return;
+  const lctx = lcv.getContext('2d');
+  let lRaf = null;
+  let lT = 0;
+  const startTime = Date.now();
+
+  const FLOWERS = [
+    { letter: 'G', color: '#4aba44', seed: 101 },
+    { letter: 'a', color: '#fd9d49', seed: 202 },
+    { letter: 'r', color: '#7fb8fd', seed: 303 },
+    { letter: 'd', color: '#a37ffd', seed: 404 },
+    { letter: 'e', color: '#e8c840', seed: 505 },
+    { letter: 'n', color: '#fd7f7f', seed: 606 },
+  ];
+
+  // 5-segment spring chains per flower (same as main app CHAIN_SEGS=5)
+  const L_CHAIN_SEGS = 5;
+  const chains = FLOWERS.map(() =>
+    Array.from({length: L_CHAIN_SEGS}, () => ({ angle: 0, vel: 0 }))
+  );
+  // Varying stem heights: outer shorter, inner taller
+  const stemScales = [0.95, 1.1, 1.25, 1.35, 1.15, 1.0];
+
+  let lmx = -9999, lmy = -9999;
+  let hoveredIdx = -1;
+
+  // Seeded RNG per flower (same as main app srng)
+  function lsrng(s) {
+    let _s = s;
+    return function() { _s = (_s * 16807 + 0) % 2147483647; return (_s & 0x7fffffff) / 2147483647; };
+  }
+
+  // Pop easing (same as main app)
+  function lpop(t) {
+    if (t <= 0) return 0; if (t >= 1) return 1;
+    return t < 0.55 ? (t / 0.55) * 1.28 : 1.28 - 0.28 * ((t - 0.55) / 0.45);
+  }
+
+  // Pointy leaf (same bezier as main app pointyLeaf)
+  function lPointyLeaf(w, h) {
+    lctx.beginPath();
+    lctx.moveTo(0, 0);
+    lctx.bezierCurveTo( w*1.2, -h*0.25,  w*0.9, -h*0.75,  0, -h);
+    lctx.bezierCurveTo(-w*0.9, -h*0.75, -w*1.2, -h*0.25,  0,  0);
+    lctx.fill();
+  }
+
+  function lResize() {
+    lcv.width = lcv.parentElement.clientWidth;
+    lcv.height = lcv.parentElement.clientHeight;
+  }
+  lResize();
+  window.addEventListener('resize', lResize);
+
+  function flowerLayout() {
+    const W = lcv.width, H = lcv.height;
+    const unit = Math.min(W, H);
+    const BASE = unit * 0.22;
+    const headBase = BASE * 0.54;
+    const spacing = 97;
+    const totalW = spacing * (FLOWERS.length - 1);
+    const baseX = (W - totalW) / 2;
+    const baseY = H * 0.62;
+    return FLOWERS.map((f, i) => ({
+      x: baseX + i * spacing,
+      y: baseY,
+      BASE,
+      headBase,
+    }));
+  }
+
+  // Step spring physics — exact same as main app stepSprings()
+  function lStepSprings() {
+    const stiffness = 280, damping = 9, dt = 0.016;
+    for (const chain of chains) {
+      let anyActive = false;
+      for (const seg of chain) {
+        if (Math.abs(seg.angle) > 0.00015 || Math.abs(seg.vel) > 0.00015) anyActive = true;
+      }
+      if (!anyActive) continue;
+      for (let i = 0; i < chain.length; i++) {
+        const seg = chain[i];
+        const tipFactor = (i + 1) / chain.length;
+        const k = stiffness * (1 - tipFactor * 0.55);
+        const d = damping * (1 - tipFactor * 0.4);
+        const force = -k * seg.angle - d * seg.vel;
+        seg.vel += force * dt;
+        seg.angle += seg.vel * dt;
+        if (Math.abs(seg.angle) < 0.00015 && Math.abs(seg.vel) < 0.00015) {
+          seg.angle = 0; seg.vel = 0;
+        }
+      }
+    }
+  }
+
+  // Kick spring — exact same wave as main app kickSpring()
+  function lKick(idx) {
+    const chain = chains[idx];
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const strength = 0.6 + Math.random() * 0.9;
+    const freq = 0.8 + Math.random() * 0.7;
+    chain.forEach((seg, i) => {
+      const delay = i * 14 * freq;
+      setTimeout(() => {
+        const jitter = 1 + (Math.random() - 0.5) * 0.4;
+        seg.vel = dir * strength * 18 * (1 - i / chain.length * 0.45) * jitter;
+      }, delay);
+    });
+  }
+
+  // Spawn kick — exact same as main app spawnKick()
+  function lSpawnKick(idx) {
+    const chain = chains[idx];
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    chain.forEach((seg, i) => {
+      const delay = (L_CHAIN_SEGS - 1 - i) * 22;
+      setTimeout(() => {
+        seg.vel = dir * 28 * ((i + 1) / chain.length);
+      }, delay);
+    });
+  }
+
+  // Chain points — exact same as main app chainPoints()
+  function lChainPoints(chain, stemH, ambientSway) {
+    const segH = stemH / L_CHAIN_SEGS;
+    const pts = [{ x: 0, y: 0 }];
+    let cx = 0, cy = 0;
+    for (let i = 0; i < L_CHAIN_SEGS; i++) {
+      const swayShare = ambientSway * (1 - i / L_CHAIN_SEGS * 0.3);
+      const totalAngle = swayShare + chain[i].angle;
+      cx += Math.sin(totalAngle) * segH;
+      cy -= Math.cos(totalAngle) * segH;
+      pts.push({ x: cx, y: cy });
+    }
+    return pts;
+  }
+
+  // Track spawn kicks
+  const spawnKicked = new Array(FLOWERS.length).fill(false);
+
+  function drawLoginFlower(idx) {
+    const layout = flowerLayout();
+    const fl = layout[idx];
+    const f = FLOWERS[idx];
+    const chain = chains[idx];
+    const rr = lsrng(f.seed);
+
+    const elapsed = (Date.now() - startTime) / 1000 - idx * 0.18;
+    if (elapsed <= 0) return;
+
+    // Trigger spawn kick once
+    if (!spawnKicked[idx]) { spawnKicked[idx] = true; lSpawnKick(idx); }
+
+    const { x, y, BASE, headBase } = fl;
+    const col = f.color;
+
+    // Same proportions as drawPlant()
+    const maxH     = BASE * 0.54 * stemScales[idx] * (0.8 + rr()*0.4);
+    const stemW    = Math.max(2, headBase * 0.045);
+    const headR    = headBase * 0.22;
+    const petalR   = headR * 0.50;
+    const petalDist= headR * 0.88;
+    const np       = 8;
+    const cr       = headR * 0.88;
+    const numBlades= 3 + Math.floor(rr() * 2);
+    const shOx     = headR * 0.2, shOy = headR * 0.25;
+
+    const petalEnd   = 0.68 + np * 0.055;
+    const grassStart = petalEnd + 0.06;
+
+    const stemProg = Math.min(1, elapsed / 0.40);
+    const stemH    = maxH * lpop(stemProg);
+
+    const ambientSway = Math.sin(lT*(0.4+rr()*0.6)+(f.seed%100)) * 2.8*(Math.PI/180)
+                        * Math.min(1, Math.max(0,(elapsed-0.55)*4));
+
+    const pts = lChainPoints(chain, stemH, ambientSway);
+    const tip = pts[pts.length - 1];
+    const tipSeg = chain[chain.length - 1];
+    const flowerLean = ambientSway + tipSeg.angle;
+
+    lctx.save();
+    lctx.translate(x, y);
+
+    // ── 1. STEM — curved line through chain points ──
+    lctx.strokeStyle = col;
+    lctx.lineWidth = stemW;
+    lctx.lineCap = 'round';
+    lctx.lineJoin = 'round';
+    lctx.beginPath();
+    lctx.moveTo(pts[0].x, pts[0].y);
+    if (pts.length <= 2) {
+      lctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+    } else {
+      for (let i = 1; i < pts.length - 1; i++) {
+        const mx = (pts[i].x + pts[i+1].x) / 2;
+        const my = (pts[i].y + pts[i+1].y) / 2;
+        lctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+      }
+      lctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+    }
+    lctx.stroke();
+    lctx.beginPath();
+
+    // ── 2. LEAVES — at 72% from base (28% from tip) ──
+    const leafProg = Math.max(0, Math.min(1, (elapsed-0.35)/0.2));
+    if (leafProg > 0 && stemH > maxH*0.15) {
+      const lh = headBase*0.28, lw = headBase*0.12;
+      const lsc = lpop(leafProg);
+      const leafIdx = (pts.length-1) * 0.28;
+      const li = Math.floor(leafIdx), lf = leafIdx - li;
+      const leafPt = {
+        x: pts[li].x + (pts[li+1]?.x - pts[li].x || 0) * lf,
+        y: pts[li].y + (pts[li+1]?.y - pts[li].y || 0) * lf
+      };
+      const leafAngle = chain[Math.min(li, chain.length-1)].angle + ambientSway;
+      lctx.fillStyle = col;
+      lctx.save(); lctx.translate(leafPt.x, leafPt.y); lctx.rotate(-1.0 + leafAngle*0.6); lctx.scale(lsc,lsc); lPointyLeaf(lw,lh); lctx.restore();
+      lctx.save(); lctx.translate(leafPt.x, leafPt.y); lctx.rotate( 1.0 + leafAngle*0.6); lctx.scale(lsc,lsc); lPointyLeaf(lw,lh); lctx.restore();
+    }
+
+    // ── Flower group at chain tip ──
+    lctx.save();
+    lctx.translate(tip.x, tip.y);
+    lctx.rotate(flowerLean);
+
+    const cp = Math.max(0, Math.min(1, (elapsed-0.55)/0.13));
+
+    // ── 3. PETAL SHADOWS ──
+    {
+      const prevA = lctx.globalAlpha;
+      lctx.globalAlpha = prevA * 0.2;
+      lctx.fillStyle = '#1a5039';
+      for (let i = 0; i < np; i++) {
+        const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
+        if (pp <= 0) continue;
+        const psc = lpop(pp);
+        const a = (i/np)*Math.PI*2 - Math.PI/2;
+        lctx.save();
+        lctx.translate(Math.cos(a)*petalDist + shOx, Math.sin(a)*petalDist + shOy);
+        lctx.scale(psc, psc);
+        lctx.beginPath(); lctx.arc(0, 0, petalR, 0, Math.PI*2); lctx.fill();
+        lctx.restore();
+      }
+      lctx.globalAlpha = prevA;
+    }
+
+    // ── 4. PETALS — 8 circles ──
+    for (let i = 0; i < np; i++) {
+      const pp = Math.max(0, Math.min(1, (elapsed - (0.68+i*0.055)) / 0.11));
+      if (pp <= 0) continue;
+      const psc = lpop(pp);
+      const a = (i/np)*Math.PI*2 - Math.PI/2;
+      lctx.save();
+      lctx.translate(Math.cos(a)*petalDist, Math.sin(a)*petalDist);
+      lctx.scale(psc, psc);
+      lctx.fillStyle = col;
+      lctx.beginPath(); lctx.arc(0, 0, petalR, 0, Math.PI*2); lctx.fill();
+      lctx.restore();
+    }
+
+    // ── 5. BASEHEAD ──
+    if (cp > 0) {
+      const csc = lpop(cp);
+      lctx.save(); lctx.scale(csc, csc);
+      lctx.fillStyle = col;
+      lctx.beginPath(); lctx.arc(0, 0, cr, 0, Math.PI*2); lctx.fill();
+      lctx.restore();
+    }
+
+    // ── 6. CENTER HEAD (white overlay) + LETTER ──
+    if (cp > 0) {
+      const csc = lpop(cp);
+      lctx.save(); lctx.scale(csc, csc);
+      lctx.fillStyle = 'rgba(255,255,255,0.2)';
+      lctx.beginPath(); lctx.arc(0, 0, cr, 0, Math.PI*2); lctx.fill();
+
+      // Letter instead of face
+      if (cp >= 1) {
+        const letterSize = cr * 1.15;
+        lctx.save();
+        lctx.rotate(-flowerLean); // counter-rotate to keep letter upright
+        lctx.font = '500 ' + letterSize + "px 'DM Mono', monospace";
+        lctx.fillStyle = '#fff';
+        lctx.textAlign = 'center';
+        lctx.textBaseline = 'middle';
+        lctx.fillText(f.letter, 0, 1);
+        lctx.restore();
+      }
+
+      lctx.restore();
+    }
+
+    lctx.restore(); // end flower group
+
+    // ── 7. GRASS — same as main app ──
+    for (let i = 0; i < numBlades; i++) {
+      const bp = Math.max(0, Math.min(1, (elapsed-(grassStart+i*0.06))/0.15));
+      if (bp <= 0) continue;
+      const bsc = lpop(bp);
+      const bx    = (rr()-0.5)*maxH*0.85;
+      const by    = (rr()-0.5)*maxH*0.25;
+      const bh    = maxH*(0.10+rr()*0.12)*bsc;
+      const bw    = stemW*(1.2+rr()*0.8);
+      const btilt = (rr()-0.5)*1.1;
+      lctx.save();
+      lctx.translate(bx, by);
+      lctx.rotate(btilt);
+      lctx.fillStyle = col;
+      lctx.fillRect(-bw/2, -bh, bw, bh);
+      lctx.restore();
+    }
+
+    lctx.restore(); // end x,y
+  }
+
+  function drawTodoArc() {
+    const W = lcv.width, H = lcv.height;
+    const unit = Math.min(W, H);
+    const layout = flowerLayout();
+
+    const elapsed = (Date.now() - startTime) / 1000;
+    const fadeIn = Math.max(0, Math.min(1, (elapsed - 0.05) / 0.5));
+    if (fadeIn <= 0) return;
+
+    const fontSize = unit * 0.065;
+    const text = 'Todo';
+    const centerX = W / 2;
+    // Position just above the tallest flower (idx 3, stemScale 1.35)
+    const tallestMaxH = layout[0].BASE * 0.54 * 1.35 * 1.1;
+    const headR = layout[0].headBase * 0.22;
+    const topY = layout[0].y - tallestMaxH - headR * 1.5 - fontSize * 0.15;
+    const arcRadius = unit * 1.2;
+
+    lctx.save();
+    lctx.globalAlpha = fadeIn;
+    lctx.font = '500 ' + fontSize + "px 'DM Mono', monospace";
+    lctx.fillStyle = '#3d7a3a';
+    lctx.textAlign = 'center';
+    lctx.textBaseline = 'middle';
+
+    const charWidths = [...text].map(ch => lctx.measureText(ch).width);
+    const totalTextW = charWidths.reduce((a, b) => a + b, 0);
+    const arcAngleSpan = totalTextW / arcRadius;
+    let angle = -Math.PI / 2 - arcAngleSpan / 2;
+
+    for (let i = 0; i < text.length; i++) {
+      const halfChar = charWidths[i] / 2;
+      angle += halfChar / arcRadius;
+      const cx = centerX + Math.cos(angle) * arcRadius;
+      const cy = topY + arcRadius + Math.sin(angle) * arcRadius;
+      // Floating wave — each letter bobs gently with phase offset
+      const wave = Math.sin(lT * 1.8 + i * 0.9) * fontSize * 0.06;
+      lctx.save();
+      lctx.translate(cx, cy + wave);
+      lctx.rotate(angle + Math.PI / 2);
+      lctx.fillText(text[i], 0, 0);
+      lctx.restore();
+      angle += halfChar / arcRadius;
+    }
+
+    lctx.restore();
+  }
+
+  function drawSubtitle() {
+    const W = lcv.width, H = lcv.height;
+    const unit = Math.min(W, H);
+    const layout = flowerLayout();
+
+    const elapsed = (Date.now() - startTime) / 1000;
+    const allSpawned = 0.18 * (FLOWERS.length - 1) + 1.5;
+    const fadeIn = Math.max(0, Math.min(1, (elapsed - allSpawned) / 0.6));
+    if (fadeIn <= 0) return;
+
+    const pulse = 0.5 + 0.5 * Math.sin(lT * 1.2);
+    const alpha = fadeIn * (0.35 + pulse * 0.25);
+    const bottomY = layout[0].y + unit * 0.12;
+
+    lctx.save();
+    lctx.globalAlpha = alpha;
+    lctx.font = '300 ' + (unit * 0.018) + "px 'DM Mono', monospace";
+    lctx.fillStyle = '#8a887e';
+    lctx.textAlign = 'center';
+    lctx.textBaseline = 'middle';
+    lctx.fillText('click anywhere to start', W / 2, bottomY);
+    lctx.restore();
+  }
+
+  function lDraw() {
+    const W = lcv.width, H = lcv.height;
+    lctx.clearRect(0, 0, W, H);
+    lctx.fillStyle = '#f8f7f4';
+    lctx.fillRect(0, 0, W, H);
+
+    // Dot grid background
+    const sp = 36;
+    lctx.fillStyle = 'rgba(0,0,0,0.055)';
+    for (let gx = 0; gx < W + sp; gx += sp)
+      for (let gy = 0; gy < H + sp; gy += sp) {
+        lctx.beginPath();
+        lctx.arc(gx, gy, 0.9, 0, Math.PI * 2);
+        lctx.fill();
+      }
+
+    lStepSprings();
+    drawTodoArc();
+    for (let i = 0; i < FLOWERS.length; i++) drawLoginFlower(i);
+    drawSubtitle();
+  }
+
+  function lLoop() {
+    lT += 0.007;
+    lDraw();
+    lRaf = requestAnimationFrame(lLoop);
+  }
+
+  // Mouse tracking + hover wiggle
+  lcv.addEventListener('mousemove', function(e) {
+    const rect = lcv.getBoundingClientRect();
+    lmx = (e.clientX - rect.left) * (lcv.width / rect.width);
+    lmy = (e.clientY - rect.top) * (lcv.height / rect.height);
+
+    const layout = flowerLayout();
+    let newHover = -1;
+    for (let i = 0; i < layout.length; i++) {
+      // Hit test against flower head position (tip of stem)
+      const rr = lsrng(FLOWERS[i].seed);
+      const maxH = layout[i].BASE * 0.54 * stemScales[i] * (0.8 + rr()*0.4);
+      const headBase = layout[i].headBase;
+      const headR = headBase * 0.22;
+      const tipY = layout[i].y - maxH;
+      const dx = lmx - layout[i].x;
+      const dy = lmy - tipY;
+      if (Math.hypot(dx, dy) < headR * 2.5) {
+        newHover = i;
+        break;
+      }
+    }
+    if (newHover !== -1 && newHover !== hoveredIdx) {
+      lKick(newHover);
+    }
+    hoveredIdx = newHover;
+  });
+
+  lcv.addEventListener('mouseleave', function() {
+    lmx = -9999; lmy = -9999; hoveredIdx = -1;
+  });
+
+  // Click anywhere to start
+  lcv.addEventListener('click', function() {
+    loginTodo();
+  });
+
+  // Expose cleanup
+  window._loginCleanup = function() {
+    if (lRaf) { cancelAnimationFrame(lRaf); lRaf = null; }
+    window.removeEventListener('resize', lResize);
+  };
+
+  lResize();
+  lLoop();
+})();
+
 // ── Entry point ──
 function loginTodo() {
+  if (window._loginCleanup) { window._loginCleanup(); delete window._loginCleanup; }
   tdLoad();
   sessionType = 'todo';
   saveSession('todo', {});
@@ -637,6 +1092,13 @@ function loginTodo() {
   tdRepopulateBar();
   tdApplyGarden();
   resize(); startLoop();
+
+  // Auto-sync on startup after everything is ready
+  setTimeout(() => {
+    const garden = tdGetGarden();
+    if (garden?.monday) mondayAutoSync(garden);
+    if (garden?.azure) azureAutoSync(garden);
+  }, 300);
 }
 
 // ── Repopulate the garden title + dropdown ──
