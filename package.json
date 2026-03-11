@@ -1,0 +1,33 @@
+{
+  "name": "todo-garden",
+  "version": "1.0.0",
+  "description": "Todo Garden - A garden-themed task manager",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ImRayman/todo-garden.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^41.0.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.todogarden.app",
+    "productName": "Todo Garden",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    },
+    "files": [
+      "index.html",
+      "main.js"
+    ]
+  }
+}

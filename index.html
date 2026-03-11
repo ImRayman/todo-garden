@@ -31,6 +31,10 @@ body {
   overflow: hidden;
 }
 
+/* Electron: make top bar draggable as window title bar */
+.electron .bar { -webkit-app-region: drag; padding-left: 80px; }
+.electron .bar select, .electron .bar button, .electron .bar input, .electron .bar a { -webkit-app-region: no-drag; }
+
 /* ── bar ── */
 .bar {
   display: flex; align-items: center; gap: 0.7rem;
@@ -495,6 +499,11 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
 </div>
 
 <script>
+// Detect Electron and add class for native title bar styling
+if (navigator.userAgent.includes('Electron')) {
+  document.documentElement.classList.add('electron');
+}
+
 // ══════════════════════════════════════════════
 // AUTH + PERSISTENCE
 // ══════════════════════════════════════════════
