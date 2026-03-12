@@ -82,7 +82,7 @@ select option { background:#fff; }
 .sdot.spin { background:#c0a040; animation:blink 0.7s infinite; }
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
 .stxt { font-size:0.58rem; color:var(--muted); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.chip { font-size:0.56rem; color:var(--muted); border:1px solid var(--border); border-radius:3px; padding:0.16rem 0.45rem; white-space:nowrap; }
+.chip { font-size:0.68rem; color:var(--muted); border:1px solid var(--border); border-radius:3px; padding:0.22rem 0.55rem; white-space:nowrap; }
 .chip b { color:var(--text); }
 
 /* plant mode banner */
@@ -104,14 +104,16 @@ select option { background:#fff; }
 .body { flex:1; display:flex; overflow:hidden; }
 
 /* ── tray ── */
-.tray { width:255px;flex-shrink:0;border-right:1px solid var(--border);background:#fafaf7;display:flex;flex-direction:column;overflow:hidden; }
+.tray { width:300px;min-width:220px;max-width:500px;flex-shrink:0;border-right:1px solid var(--border);background:#fafaf7;display:flex;flex-direction:column;overflow:hidden;position:relative; }
+.tray-resize-handle { position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize;z-index:10;transition:background 0.15s; }
+.tray-resize-handle:hover, .tray-resize-handle.active { background:rgba(61,122,58,0.18); }
 .tray-head { padding:0.65rem 0.85rem 0.5rem;border-bottom:1px solid var(--border);font-size:0.55rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;flex-shrink:0; }
 .tray-n { color:var(--text);font-size:0.72rem;font-weight:500; }
-.tray-scroll { flex:1;overflow-y:auto;padding:0.5rem;display:flex;flex-direction:column;gap:0.35rem; }
+.tray-scroll { flex:1;overflow-y:auto;padding:0.6rem;display:flex;flex-direction:column;gap:0.5rem; }
 .tray-scroll::-webkit-scrollbar { width:2px; }
 .tray-scroll::-webkit-scrollbar-thumb { background:var(--border);border-radius:2px; }
 .tray-scroll > * { transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1); }
-.tray-foot { padding:0.4rem 0.7rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;flex-shrink:0;background:#f5f5f0; }
+.tray-foot { padding:0.5rem 0.8rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;flex-shrink:0;background:#f5f5f0; }
 
 /* garden header in tray */
 .tray-hdr { border-bottom:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;background:#f7f7f4; }
@@ -147,11 +149,11 @@ select option { background:#fff; }
 .tray-hdr-create button.ok { border-color:var(--accent);color:var(--accent); }
 .tray-hdr-create button.ok:hover { background:var(--accent-bg); }
 /* progress bar */
-.garden-progress { padding:0.35rem 0;margin-top:0.35rem; }
+.garden-progress { padding:0.5rem 0;margin-top:0.35rem; }
 .garden-progress-info { display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.25rem; }
-.garden-progress-pct { font-size:0.65rem;font-weight:600;color:var(--text);font-family:'DM Mono',monospace; }
-.garden-progress-stats { font-size:0.48rem;color:var(--faint);letter-spacing:0.02em; }
-.garden-progress-track { height:5px;background:var(--border);border-radius:999px;overflow:hidden; }
+.garden-progress-pct { font-size:0.85rem;font-weight:600;color:var(--text);font-family:'DM Mono',monospace; }
+.garden-progress-stats { font-size:0.62rem;color:var(--faint);letter-spacing:0.02em; }
+.garden-progress-track { height:7px;background:var(--border);border-radius:999px;overflow:hidden; }
 .garden-progress-fill { height:100%;background:var(--accent);border-radius:999px;transition:width 0.6s cubic-bezier(0.34,1.2,0.64,1),background 0.3s; }
 
 /* due date row */
@@ -162,57 +164,57 @@ select option { background:#fff; }
 .todo-due-clear:hover { color:#c06050; }
 
 /* add task area */
-.tray-add { padding:0.55rem 0.65rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:0.35rem;flex-shrink:0; }
-.tray-add input { width:100%;background:var(--bg2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);padding:0.5rem 0.65rem;font-family:'DM Mono',monospace;font-size:0.7rem;outline:none;box-sizing:border-box;transition:border-color 0.15s; }
+.tray-add { padding:0.65rem 0.75rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:0.45rem;flex-shrink:0; }
+.tray-add input { width:100%;background:var(--bg2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);padding:0.6rem 0.75rem;font-family:'DM Mono',monospace;font-size:0.82rem;outline:none;box-sizing:border-box;transition:border-color 0.15s; }
 .tray-add input:focus { border-color:var(--accent); }
-.tray-add-btn { width:100%;padding:0.62rem;font-size:0.75rem;border-radius:7px;border:none;background:var(--accent);cursor:pointer;color:#fff;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.03em;transition:background 0.15s,transform 0.1s;box-shadow:0 2px 8px rgba(61,122,58,0.25); }
+.tray-add-btn { width:100%;padding:0.72rem;font-size:0.88rem;border-radius:7px;border:none;background:var(--accent);cursor:pointer;color:#fff;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.03em;transition:background 0.15s,transform 0.1s;box-shadow:0 2px 8px rgba(61,122,58,0.25); }
 .tray-add-btn:hover { background:#3a9a2e;transform:translateY(-1px); }
 .tray-add-btn:active { transform:translateY(0); }
 
 /* todo task card */
-.todo-task { border-radius:8px;padding:0.6rem 0.7rem;border:1.5px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:0;transition:border-color 0.15s,background 0.15s,opacity 0.2s,box-shadow 0.15s;position:relative;cursor:grab;user-select:none; }
-.todo-task-row { display:flex;align-items:center;gap:0.5rem;width:100%; }
+.todo-task { border-radius:10px;padding:0.85rem 0.95rem;border:1.5px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:0;transition:border-color 0.15s,background 0.15s,opacity 0.2s,box-shadow 0.15s;position:relative;cursor:grab;user-select:none; }
+.todo-task-row { display:flex;align-items:center;gap:0.6rem;width:100%; }
 .todo-task:hover { border-color:var(--border2,#c8d8c4);background:#fafefa;box-shadow:0 2px 8px rgba(0,0,0,0.06); }
 .todo-task.selected { border-color:var(--accent);background:var(--accent-bg);box-shadow:0 0 0 3px rgba(61,122,58,0.12); }
 .todo-task.dragging { position:fixed!important;z-index:9999;opacity:0.92;box-shadow:0 8px 24px rgba(0,0,0,0.18);cursor:grabbing;transition:transform 0.15s ease,left 0s,top 0s; }
 .todo-task-placeholder { border-radius:8px;background:var(--accent-bg);border:1.5px dashed var(--accent);transition:height 0.2s ease;pointer-events:none;margin-bottom:0.45rem; }
-.todo-drag-handle { color:var(--faint);font-size:0.7rem;cursor:grab;flex-shrink:0;line-height:1; }
-.todo-task-title { flex:1;font-size:0.72rem;color:var(--text);line-height:1.45;word-break:break-word; }
+.todo-drag-handle { color:var(--faint);font-size:0.82rem;cursor:grab;flex-shrink:0;line-height:1; }
+.todo-task-title { flex:1;font-size:0.88rem;color:var(--text);line-height:1.45;word-break:break-word; }
 .todo-task-title-input { flex:1;min-width:0;font-size:0.72rem;color:var(--text);line-height:1.45;background:var(--bg2);border:1.5px solid var(--accent);border-radius:4px;padding:0.15rem 0.35rem;font-family:'DM Mono',monospace;outline:none;word-break:break-word; }
 .todo-del { background:none;border:none;cursor:pointer;color:var(--faint);font-size:0.75rem;padding:0 0.1rem;opacity:0;transition:opacity 0.12s;flex-shrink:0; }
 .todo-task:hover .todo-del { opacity:0.7; }
 .todo-task:hover .todo-del:hover { opacity:1;color:#c06050; }
 .todo-seed-hint { font-size:0.5rem;color:var(--muted);letter-spacing:0.04em; }
-.todo-color-dot { width:9px;height:9px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(0,0,0,0.1); }
+.todo-color-dot { width:12px;height:12px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(0,0,0,0.1); }
 
 /* expandable panel */
-.todo-expand { width:100%;padding-top:0.45rem;margin-top:0.4rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0.25rem; }
-.todo-expand-label { font-size:0.46rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--faint);margin-bottom:0.1rem; }
-.todo-color-row { display:flex;gap:0.3rem;flex-wrap:wrap;align-items:center; }
-.todo-color-swatch { width:17px;height:17px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform 0.12s,border-color 0.12s;flex-shrink:0; }
+.todo-expand { width:100%;padding-top:0.55rem;margin-top:0.5rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0.35rem; }
+.todo-expand-label { font-size:0.58rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);margin-bottom:0.15rem; }
+.todo-color-row { display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center; }
+.todo-color-swatch { width:22px;height:22px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform 0.12s,border-color 0.12s;flex-shrink:0; }
 .todo-color-swatch:hover { transform:scale(1.2); }
 .todo-color-swatch.active { border-color:#333;transform:scale(1.1); }
 .todo-member-row { gap:0.25rem;padding-top:0.15rem; }
-.todo-member-chip { width:22px;height:22px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform 0.12s,border-color 0.12s;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.42rem;font-weight:700;color:#fff;font-family:'DM Mono',monospace;position:relative; }
+.todo-member-chip { width:26px;height:26px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:transform 0.12s,border-color 0.12s;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.52rem;font-weight:700;color:#fff;font-family:'DM Mono',monospace;position:relative; }
 .todo-member-chip:hover { transform:scale(1.2); }
 .todo-member-chip.active { border-color:#333;transform:scale(1.1); }
 .todo-member-chip::after { content:attr(title);position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#333;color:#fff;font-size:0.48rem;font-weight:500;padding:2px 6px;border-radius:4px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 0.15s;z-index:10; }
 .todo-member-chip:hover::after { opacity:1; }
-.todo-plant-btn { width:100%;margin-top:0.35rem;padding:0.48rem;font-size:0.7rem;border-radius:6px;border:1.5px solid var(--accent);background:var(--accent);cursor:pointer;color:#fff;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.04em;transition:background 0.15s; }
+.todo-plant-btn { width:100%;margin-top:0.4rem;padding:0.58rem;font-size:0.82rem;border-radius:6px;border:1.5px solid var(--accent);background:var(--accent);cursor:pointer;color:#fff;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:0.04em;transition:background 0.15s; }
 .todo-plant-btn:hover { background:#3a8a28;border-color:#3a8a28; }
 .todo-edit-icon { background:none;border:none;cursor:pointer;color:var(--faint);font-size:0.6rem;padding:0 0.15rem;flex-shrink:0;opacity:0;transition:opacity 0.12s,color 0.12s;line-height:1; }
 .todo-task:hover .todo-edit-icon { opacity:0.6; }
 .todo-edit-icon:hover { opacity:1!important;color:var(--accent); }
 /* size picker */
-.todo-size-row { display:flex;gap:0.3rem;margin-bottom:0.1rem; }
-.todo-size-btn { flex:1;padding:0.34rem 0.2rem;border-radius:6px;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:0.58rem;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:0.04em;transition:border-color 0.12s,background 0.12s,color 0.12s; }
-.todo-size-btn:hover { border-color:var(--border2);color:var(--text); }
-.todo-size-btn.active { border-color:var(--accent);background:var(--accent-bg);color:var(--accent);font-weight:500; }
+.todo-size-row { display:flex;gap:0.4rem;margin-bottom:0.1rem; }
+.todo-size-btn { width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--card);cursor:pointer;font-size:0.62rem;color:var(--muted);font-family:'DM Mono',monospace;font-weight:600;letter-spacing:0;transition:transform 0.12s,border-color 0.12s,background 0.12s,color 0.12s;display:flex;align-items:center;justify-content:center;padding:0;flex:none; }
+.todo-size-btn:hover { transform:scale(1.15);border-color:var(--border2);color:var(--text); }
+.todo-size-btn.active { border-color:var(--accent);background:var(--accent);color:#fff;transform:scale(1.08); }
 
 /* subtask checklist */
-.todo-subtask-list { display:flex;flex-direction:column;gap:0.2rem; }
-.todo-subtask { display:flex;align-items:center;gap:0.35rem;padding:0.18rem 0;font-size:0.62rem;color:var(--text); }
-.todo-subtask-check { width:14px;height:14px;border-radius:4px;border:1.5px solid var(--border2);background:var(--card);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background 0.12s,border-color 0.12s;font-size:0.5rem;color:transparent;line-height:1; }
+.todo-subtask-list { display:flex;flex-direction:column;gap:0.3rem; }
+.todo-subtask { display:flex;align-items:center;gap:0.4rem;padding:0.22rem 0;font-size:0.75rem;color:var(--text); }
+.todo-subtask-check { width:17px;height:17px;border-radius:4px;border:1.5px solid var(--border2);background:var(--card);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background 0.12s,border-color 0.12s;font-size:0.58rem;color:transparent;line-height:1; }
 .todo-subtask-check:hover { border-color:var(--accent); }
 .todo-subtask-check.checked { background:var(--accent);border-color:var(--accent);color:#fff; }
 .todo-subtask-title { flex:1;min-width:0;word-break:break-word;line-height:1.4; }
@@ -221,21 +223,21 @@ select option { background:#fff; }
 .todo-subtask:hover .todo-subtask-del { opacity:0.7; }
 .todo-subtask-del:hover { opacity:1!important;color:#c06050; }
 .todo-subtask-add { display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem; }
-.todo-subtask-add-btn { background:none;border:none;cursor:pointer;font-size:0.56rem;color:var(--faint);font-family:'DM Mono',monospace;padding:0.15rem 0;transition:color 0.12s; }
-.todo-subtask-add-btn:hover { color:var(--accent); }
-.todo-subtask-input { flex:1;min-width:0;font-size:0.6rem;color:var(--text);background:var(--bg2);border:1.5px solid var(--border);border-radius:5px;padding:0.25rem 0.4rem;font-family:'DM Mono',monospace;outline:none;transition:border-color 0.15s; }
+.todo-subtask-add-btn { background:var(--bg2);border:1.5px dashed var(--border);border-radius:6px;cursor:pointer;font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace;padding:0.38rem 0.6rem;transition:border-color 0.15s,color 0.15s,background 0.15s;width:100%;text-align:center; }
+.todo-subtask-add-btn:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-bg); }
+.todo-subtask-input { flex:1;min-width:0;font-size:0.75rem;color:var(--text);background:var(--bg2);border:1.5px solid var(--border);border-radius:5px;padding:0.32rem 0.5rem;font-family:'DM Mono',monospace;outline:none;transition:border-color 0.15s; }
 .todo-subtask-input:focus { border-color:var(--accent); }
 .todo-subtask-progress { display:flex;align-items:center;gap:0.35rem;margin-top:0.1rem; }
-.todo-subtask-progress-track { flex:1;height:3px;background:var(--border);border-radius:999px;overflow:hidden; }
+.todo-subtask-progress-track { flex:1;height:4px;background:var(--border);border-radius:999px;overflow:hidden; }
 .todo-subtask-progress-fill { height:100%;background:var(--accent);border-radius:999px;transition:width 0.3s ease; }
-.todo-subtask-progress-text { font-size:0.46rem;color:var(--faint);flex-shrink:0; }
+.todo-subtask-progress-text { font-size:0.58rem;color:var(--faint);flex-shrink:0; }
 /* moving ghost — faded placeholder while repositioning */
 /* floating move label */
 
 /* done tab items */
-.todo-done-item { display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.6rem;border-radius:7px;background:var(--bg2);border:1px solid var(--border);font-size:0.62rem;color:var(--muted); }
-.todo-done-item .done-check { width:18px;height:18px;border-radius:50%;background:#4a7c59;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:0.42rem;line-height:1; }
-.todo-done-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0;opacity:0.6; }
+.todo-done-item { display:flex;align-items:center;gap:0.55rem;padding:0.6rem 0.75rem;border-radius:8px;background:var(--bg2);border:1px solid var(--border);font-size:0.78rem;color:var(--muted); }
+.todo-done-item .done-check { width:22px;height:22px;border-radius:50%;background:#4a7c59;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:0.52rem;line-height:1; }
+.todo-done-dot { width:9px;height:9px;border-radius:50%;flex-shrink:0;opacity:0.6; }
 
 /* slide-in */
 @keyframes slideInTask { from{opacity:0;transform:translateX(-18px)} to{opacity:1;transform:translateX(0)} }
@@ -243,7 +245,7 @@ select option { background:#fff; }
 
 /* tabs */
 .tray-tabs { display:flex;border-bottom:1px solid var(--border);flex-shrink:0; }
-.tray-tab { flex:1;padding:0.42rem 0;font-size:0.56rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-align:center;border:none;border-bottom:2px solid transparent;background:none;font-family:'DM Mono',monospace;transition:color 0.15s,border-color 0.15s; }
+.tray-tab { flex:1;padding:0.55rem 0;font-size:0.7rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;text-align:center;border:none;border-bottom:2px solid transparent;background:none;font-family:'DM Mono',monospace;transition:color 0.15s,border-color 0.15s; }
 .tray-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
 .tray-tab:hover:not(.active) { color:var(--text); }
 
@@ -463,6 +465,7 @@ canvas { position:absolute;top:0;left:0;width:100%;height:100%; }
       <span class="chip">seeds <b id="n-seeds">0</b></span>
       <span class="chip">planted <b id="n-planted">0</b></span>
     </div>
+    <div class="tray-resize-handle" id="tray-resize-handle"></div>
   </div>
   <div class="garden" id="garden">
     <canvas id="gc"></canvas>
@@ -2462,6 +2465,33 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
+/* tray resize handle */
+(function(){
+  const tray = document.querySelector('.tray');
+  const handle = document.getElementById('tray-resize-handle');
+  const saved = localStorage.getItem('tray-width');
+  if (saved) tray.style.width = saved + 'px';
+  let dragging = false, startX, startW;
+  handle.addEventListener('pointerdown', function(e){
+    dragging = true; startX = e.clientX; startW = tray.offsetWidth;
+    handle.classList.add('active');
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', function(e){
+    if (!dragging) return;
+    const w = Math.min(500, Math.max(220, startW + e.clientX - startX));
+    tray.style.width = w + 'px';
+    resize();
+  });
+  handle.addEventListener('pointerup', function(e){
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('active');
+    localStorage.setItem('tray-width', tray.offsetWidth);
+  });
+})();
+
 function startLoop() {
   if (raf) return;
   (function loop(){ T+=0.007; draw(); raf=requestAnimationFrame(loop); })();
@@ -3699,7 +3729,7 @@ function buildTray() {
           <div class="todo-expand-label" style="margin-top:0.45rem">Flower size</div>
           <div class="todo-size-row">
             ${['small','medium','large'].map(sz => `
-              <button class="todo-size-btn ${(task.size||'medium')===sz ? 'active':''}" data-size="${sz}">${sz}</button>
+              <button class="todo-size-btn ${(task.size||'medium')===sz ? 'active':''}" data-size="${sz}">${sz[0].toUpperCase()}</button>
             `).join('')}
           </div>` : `
           <div style="display:flex;align-items:center;gap:0.3rem;font-size:0.52rem;color:var(--accent);margin-bottom:0.15rem">🌱 Planted — complete subtasks to finish</div>
@@ -3767,6 +3797,30 @@ function buildTray() {
         el.querySelectorAll('.todo-subtask-del').forEach(db => {
           db.addEventListener('click', e => { e.stopPropagation(); tdDeleteSubtask(task.id, db.dataset.sid); });
         });
+        // subtask rename on double-click
+        el.querySelectorAll('.todo-subtask-title').forEach(st => {
+          st.addEventListener('dblclick', e => {
+            e.stopPropagation(); e.preventDefault();
+            const sid = st.parentElement.dataset.sid;
+            const sub = (task.subtasks||[]).find(s => s.id === sid); if (!sub) return;
+            const inp = document.createElement('input');
+            inp.className = 'todo-subtask-input';
+            inp.value = sub.title;
+            inp.style.flex = '1';
+            st.replaceWith(inp);
+            let committed = false;
+            const commit = () => {
+              if (committed) return; committed = true;
+              const val = inp.value.trim();
+              if (val && val !== sub.title) { sub.title = val; tdSave(); saveGarden(); }
+              buildTray();
+            };
+            inp.addEventListener('click', ev => ev.stopPropagation());
+            inp.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') commit(); if (ev.key === 'Escape') buildTray(); });
+            inp.addEventListener('blur', () => setTimeout(commit, 120));
+            setTimeout(() => { inp.focus(); inp.select(); }, 10);
+          });
+        });
         // add subtask button
         const addSubBtn = el.querySelector('.todo-subtask-add-btn');
         if (addSubBtn) {
@@ -3785,9 +3839,12 @@ function buildTray() {
             e.stopPropagation();
             if (e.key === 'Enter') {
               const val = subInput.value.trim();
-              if (val) { _tdAddingSubtaskFor = null; tdAddSubtask(task.id, val); }
+              if (val) { _tdAddingSubtaskFor = task.id; tdAddSubtask(task.id, val); }
             }
             if (e.key === 'Escape') { _tdAddingSubtaskFor = null; buildTray(); }
+          });
+          subInput.addEventListener('blur', () => {
+            setTimeout(() => { if (_tdAddingSubtaskFor === task.id && document.activeElement?.id !== 'td-subtask-input') { _tdAddingSubtaskFor = null; buildTray(); } }, 100);
           });
         }
       }
@@ -3812,7 +3869,7 @@ function buildTray() {
       let _taskClickTimer = null;
       el.addEventListener('click', e => {
         if (isEditing || didDrag) return;
-        if (e.target.closest('.todo-del') || e.target.closest('.todo-color-swatch') || e.target.closest('.todo-member-chip') || e.target.closest('.todo-plant-btn') || e.target.closest('.todo-size-btn') || e.target.closest('.todo-edit-icon') || e.target.closest('.todo-subtask-check') || e.target.closest('.todo-subtask-del') || e.target.closest('.todo-subtask-add-btn') || e.target.closest('.todo-subtask-input')) return;
+        if (e.target.closest('.todo-del') || e.target.closest('.todo-color-swatch') || e.target.closest('.todo-member-chip') || e.target.closest('.todo-plant-btn') || e.target.closest('.todo-size-btn') || e.target.closest('.todo-edit-icon') || e.target.closest('.todo-subtask-check') || e.target.closest('.todo-subtask-del') || e.target.closest('.todo-subtask-add-btn') || e.target.closest('.todo-subtask-input') || e.target.closest('.todo-subtask-title')) return;
         if (_taskClickTimer) { clearTimeout(_taskClickTimer); _taskClickTimer = null; return; }
         _taskClickTimer = setTimeout(() => {
           _taskClickTimer = null;
@@ -3824,6 +3881,7 @@ function buildTray() {
       // double-click card = edit title
       el.addEventListener('dblclick', e => {
         if (isEditing) return;
+        if (e.target.closest('.todo-subtask-title') || e.target.closest('.todo-subtask-input')) return;
         if (_taskClickTimer) { clearTimeout(_taskClickTimer); _taskClickTimer = null; }
         e.stopPropagation();
         tdStartEditTask(task.id);
