@@ -7,14 +7,7 @@ const SOURCE_DIR = '/Applications/Projects/HTML/todo-garden';
 function updateApp() {
   const win = BrowserWindow.getFocusedWindow();
 
-  dialog.showMessageBox(win, {
-    type: 'info',
-    title: 'Update',
-    message: 'Updating Todo Garden...',
-    detail: 'Pulling latest changes and rebuilding. This may take a minute.',
-    buttons: ['OK']
-  });
-
+  // Pull latest from main
   exec('git pull origin main', { cwd: SOURCE_DIR }, (err, stdout, stderr) => {
     if (err) {
       dialog.showMessageBox(win, {
@@ -26,23 +19,23 @@ function updateApp() {
       return;
     }
 
-    if (stdout.includes('Already up to date')) {
-      dialog.showMessageBox(win, {
-        type: 'info',
-        title: 'No Updates',
-        message: 'Already up to date!',
-        detail: 'You are running the latest version.'
-      });
-      return;
-    }
+    const pullMsg = stdout.trim();
 
-    // Rebuild the app
+    // Always rebuild — source may be ahead of the running app
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Building',
+      message: 'Rebuilding Todo Garden...',
+      detail: pullMsg + '\n\nThis may take a minute.',
+      buttons: ['OK']
+    });
+
     exec('npm run build', { cwd: SOURCE_DIR }, (buildErr, buildOut, buildStderr) => {
       if (buildErr) {
         dialog.showMessageBox(win, {
           type: 'error',
           title: 'Build Failed',
-          message: 'Build failed after pulling updates',
+          message: 'Build failed',
           detail: buildStderr || buildErr.message
         });
         return;
@@ -52,7 +45,7 @@ function updateApp() {
         type: 'info',
         title: 'Update Complete',
         message: 'Todo Garden has been updated!',
-        detail: `${stdout.trim()}\n\nPlease reopen the app to use the new version.`
+        detail: 'Please reopen the app to use the new version.'
       }).then(() => {
         app.quit();
       });
