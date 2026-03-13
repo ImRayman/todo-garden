@@ -3,12 +3,14 @@ const path = require('path');
 const { exec } = require('child_process');
 
 const SOURCE_DIR = '/Applications/Projects/HTML/todo-garden';
+const ENV_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+const EXEC_OPTS = { cwd: SOURCE_DIR, env: { ...process.env, PATH: ENV_PATH } };
 
 function updateApp() {
   const win = BrowserWindow.getFocusedWindow();
 
   // Pull latest from main
-  exec('git pull origin main', { cwd: SOURCE_DIR }, (err, stdout, stderr) => {
+  exec('git pull origin main', EXEC_OPTS, (err, stdout, stderr) => {
     if (err) {
       dialog.showMessageBox(win, {
         type: 'error',
@@ -30,7 +32,7 @@ function updateApp() {
       buttons: ['OK']
     });
 
-    exec('npm run build', { cwd: SOURCE_DIR }, (buildErr, buildOut, buildStderr) => {
+    exec('npm run build', EXEC_OPTS, (buildErr, buildOut, buildStderr) => {
       if (buildErr) {
         dialog.showMessageBox(win, {
           type: 'error',
