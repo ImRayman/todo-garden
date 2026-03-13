@@ -1,5 +1,122 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
+const { exec } = require('child_process');
+
+const SOURCE_DIR = '/Applications/Projects/HTML/todo-garden';
+
+function updateApp() {
+  const win = BrowserWindow.getFocusedWindow();
+
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'Update',
+    message: 'Updating Todo Garden...',
+    detail: 'Pulling latest changes and rebuilding. This may take a minute.',
+    buttons: ['OK']
+  });
+
+  exec('git pull origin main', { cwd: SOURCE_DIR }, (err, stdout, stderr) => {
+    if (err) {
+      dialog.showMessageBox(win, {
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Git pull failed',
+        detail: stderr || err.message
+      });
+      return;
+    }
+
+    if (stdout.includes('Already up to date')) {
+      dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'No Updates',
+        message: 'Already up to date!',
+        detail: 'You are running the latest version.'
+      });
+      return;
+    }
+
+    // Rebuild the app
+    exec('npm run build', { cwd: SOURCE_DIR }, (buildErr, buildOut, buildStderr) => {
+      if (buildErr) {
+        dialog.showMessageBox(win, {
+          type: 'error',
+          title: 'Build Failed',
+          message: 'Build failed after pulling updates',
+          detail: buildStderr || buildErr.message
+        });
+        return;
+      }
+
+      dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Update Complete',
+        message: 'Todo Garden has been updated!',
+        detail: `${stdout.trim()}\n\nPlease reopen the app to use the new version.`
+      }).then(() => {
+        app.quit();
+      });
+    });
+  });
+}
+
+function buildMenu() {
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates...',
+          click: updateApp
+        },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { role: 'close' }
+      ]
+    }
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -19,7 +136,10 @@ function createWindow() {
   win.loadFile('index.html');
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  buildMenu();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   app.quit();
