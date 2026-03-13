@@ -9,7 +9,6 @@ const EXEC_OPTS = { cwd: SOURCE_DIR, env: { ...process.env, PATH: ENV_PATH } };
 function updateApp() {
   const win = BrowserWindow.getFocusedWindow();
 
-  // Pull latest from main
   exec('git pull origin main', EXEC_OPTS, (err, stdout, stderr) => {
     if (err) {
       dialog.showMessageBox(win, {
@@ -23,34 +22,13 @@ function updateApp() {
 
     const pullMsg = stdout.trim();
 
-    // Always rebuild — source may be ahead of the running app
     dialog.showMessageBox(win, {
       type: 'info',
-      title: 'Building',
-      message: 'Rebuilding Todo Garden...',
-      detail: pullMsg + '\n\nThis may take a minute.',
-      buttons: ['OK']
-    });
-
-    exec('npm run build', EXEC_OPTS, (buildErr, buildOut, buildStderr) => {
-      if (buildErr) {
-        dialog.showMessageBox(win, {
-          type: 'error',
-          title: 'Build Failed',
-          message: 'Build failed',
-          detail: buildStderr || buildErr.message
-        });
-        return;
-      }
-
-      dialog.showMessageBox(win, {
-        type: 'info',
-        title: 'Update Complete',
-        message: 'Todo Garden has been updated!',
-        detail: 'Please reopen the app to use the new version.'
-      }).then(() => {
-        app.quit();
-      });
+      title: 'Update Complete',
+      message: 'Todo Garden has been updated!',
+      detail: pullMsg + '\n\nThe app will now reload.'
+    }).then(() => {
+      win.loadFile(path.join(SOURCE_DIR, 'index.html'));
     });
   });
 }
@@ -128,7 +106,7 @@ function createWindow() {
     }
   });
 
-  win.loadFile('index.html');
+  win.loadFile(path.join(SOURCE_DIR, 'index.html'));
 }
 
 app.whenReady().then(() => {
