@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 
-const SOURCE_DIR = '/Applications/Projects/HTML/todo-garden';
+const SOURCE_DIR = '/Applications/Projects/ClaudeProjects/todo-garden';
 const ENV_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 const EXEC_OPTS = { cwd: SOURCE_DIR, env: { ...process.env, PATH: ENV_PATH } };
 
