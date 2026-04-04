@@ -4,7 +4,7 @@
     {
       "name": "todo-garden",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8090", "--directory", "/Applications/Projects/HTML/todo-garden"],
+      "runtimeArgs": ["-m", "http.server", "8090", "--directory", "/Applications/Projects/ClaudeProjects/todo-garden"],
       "port": 8090
     }
   ]

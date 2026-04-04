@@ -555,6 +555,159 @@ function tdLoadSel() {
   try { return JSON.parse(localStorage.getItem(TD_SEL_KEY) || '{}'); } catch(e) { return {}; }
 }
 function tdUID() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+// ── Garden Code: encode/decode for backup & sharing ──
+// Uses short keys to minimize code length:
+// n=name, t=tasks(i=id,l=title,d=done,c=color,s=size,u=dueDate,b=subtasks), p=planted(i=id,x,y,a=plantedAt,c=color,s=size)
+function _gcStripTasks(tasks) {
+  return tasks.map(t => {
+    const o = { i: t.id, l: t.title, d: t.done ? 1 : 0 };
+    if (t.color) o.c = t.color;
+    if (t.size && t.size !== 'medium') o.s = t.size;
+    if (t.dueDate) o.u = t.dueDate;
+    if (t.subtasks?.length) o.b = t.subtasks.map(s => ({ i: s.id, l: s.title, d: s.done ? 1 : 0 }));
+    return o;
+  });
+}
+function _gcExpandTasks(arr) {
+  return arr.map(o => {
+    const t = { id: o.i, title: o.l, done: !!o.d };
+    if (o.c) t.color = o.c;
+    if (o.s) t.size = o.s;
+    if (o.u) t.dueDate = o.u;
+    if (o.b) t.subtasks = o.b.map(s => ({ id: s.i, title: s.l, done: !!s.d }));
+    return t;
+  });
+}
+function _gcStripPlanted(data) {
+  if (!data?.data) return null;
+  return data.data.map(p => {
+    const o = { i: p.id, x: Math.round(p.x), y: Math.round(p.y) };
+    if (p.plantedAt) o.a = p.plantedAt;
+    if (p.color) o.c = p.color;
+    if (p.size && p.size !== 'medium') o.s = p.size;
+    return o;
+  });
+}
+function _gcExpandPlanted(arr) {
+  if (!arr) return null;
+  return { data: arr.map(o => ({
+    id: o.i, x: o.x, y: o.y, plantedAt: o.a || Date.now() - 10000,
+    color: o.c || null, size: o.s || 'medium',
+    title: '', type: 'task', owner: 'Me', state: 'Done', priority: 'medium', sprint: '', seed: 1
+  })), ts: Date.now() };
+}
+
+async function gardenToCode(garden) {
+  const gkey = `tg_garden::todo::${garden.id}`;
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(gkey)); } catch(e) {}
+  const payload = { n: garden.name, t: _gcStripTasks(garden.tasks), p: _gcStripPlanted(raw) };
+  const json = JSON.stringify(payload);
+  const blob = new Blob([json]);
+  const compressed = blob.stream().pipeThrough(new CompressionStream('deflate'));
+  const buf = await new Response(compressed).arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return 'G2:' + btoa(binary);
+}
+
+async function codeToGarden(code) {
+  const ver = code.slice(0, 3);
+  if (ver !== 'G1:' && ver !== 'G2:') throw new Error('Invalid garden code');
+  const b64 = code.slice(3);
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes]);
+  const decompressed = blob.stream().pipeThrough(new DecompressionStream('deflate'));
+  const text = await new Response(decompressed).text();
+  const raw = JSON.parse(text);
+  // Handle both G1 (full keys) and G2 (short keys) formats
+  if (ver === 'G1:') return raw;
+  return { name: raw.n, tasks: _gcExpandTasks(raw.t), planted: _gcExpandPlanted(raw.p) };
+}
+
+function showGardenCodePanel() {
+  const garden = tdGetGarden();
+  if (!garden) return;
+  const modal = document.getElementById('sync-modal');
+  const content = document.getElementById('sync-modal-content');
+  const gName = garden.name.replace(/</g, '&lt;');
+  const isElectron = !!window.electronAPI;
+  content.innerHTML = `
+    <h3>Share Garden</h3>
+    <p class="sync-sub">Copy your garden code to back up or share it. Paste a code to restore.</p>
+    <button class="btn" id="gc-copy-btn" style="font-size:0.56rem;margin-bottom:0.4rem;width:100%" onclick="
+      const btn=this; const isElectron=!!window.electronAPI;
+      const g=tdGetGarden(); const gn=g?g.name:'Garden';
+      const label=isElectron?('Save '+gn+' to File'):('Copy '+gn+' Code');
+      btn.textContent='Saving...'; btn.disabled=true;
+      gardenToCode(g).then(async code => {
+        if (isElectron) { await window.electronAPI.saveGardenFile(code, gn); btn.textContent='Saved!'; }
+        else { await navigator.clipboard.writeText(code); btn.textContent='Copied!'; }
+        setTimeout(() => { btn.textContent=label; btn.disabled=false; }, 1500);
+      }).catch(() => { btn.textContent=label; btn.disabled=false; })
+    ">${isElectron ? 'Save ' + gName + ' to File' : 'Copy ' + gName + ' Code'}</button>
+    ${isElectron ? `<button class="btn" style="font-size:0.56rem;margin-bottom:0.4rem;width:100%" onclick="
+      const btn=this; btn.textContent='Copying...'; btn.disabled=true;
+      gardenToCode(tdGetGarden()).then(code => navigator.clipboard.writeText(code)).then(() => {
+        btn.textContent='Copied!'; setTimeout(() => { btn.textContent='Copy ${gName} Code'; btn.disabled=false; }, 1500);
+      }).catch(() => { btn.textContent='Copy ${gName} Code'; btn.disabled=false; })
+    ">Copy ${gName} Code</button>
+    <a href="#" style="font-size:0.48rem;color:var(--muted);display:block;text-align:center;margin-bottom:0.6rem" onclick="event.preventDefault();window.electronAPI.showSaveFile(tdGetGarden()?.name)">Open file location</a>` : '<div style="margin-bottom:0.6rem"></div>'}
+    <hr style="border:none;border-top:1px solid var(--border);margin:0 0 0.6rem 0">
+    <label style="font-size:0.56rem;color:var(--muted);margin-bottom:0.2rem;display:block">Load a Garden Code</label>
+    <textarea id="gc-import" rows="4" placeholder="Paste a garden code here..." style="width:100%;font-family:'DM Mono',monospace;font-size:0.52rem;padding:0.4rem;border:1px solid var(--border);border-radius:5px;background:var(--bg2);resize:none;box-sizing:border-box;margin-bottom:0.3rem"></textarea>
+    <div style="display:flex;gap:0.4rem">
+      <button class="btn" style="font-size:0.56rem" onclick="loadGardenCode()">Load Code</button>
+      <button class="btn" style="font-size:0.56rem" onclick="syncShowPanel()">Back</button>
+      <button class="btn" style="font-size:0.56rem" onclick="syncCloseModal()">Close</button>
+    </div>
+  `;
+  modal.style.display = 'flex';
+}
+
+async function loadGardenCode() {
+  const input = document.getElementById('gc-import').value.trim();
+  if (!input) return;
+  try {
+    const data = await codeToGarden(input);
+    const gardenName = data.name || 'Imported Garden';
+
+    // Check if a garden with this name already exists — just switch to it
+    const existing = tdData.gardens.find(g => g.name === gardenName);
+    if (existing) {
+      tdGardenId = existing.id;
+      _tdLoadedGardenKey = null;
+      tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
+      syncCloseModal();
+      return;
+    }
+
+    // Create a new garden from the code
+    const newId = tdUID();
+    const newGarden = { id: newId, name: gardenName, tasks: data.tasks || [] };
+    tdData.gardens.push(newGarden);
+    tdSave();
+
+    // Write planted visual positions if included
+    if (data.planted) {
+      const gkey = `tg_garden::todo::${newId}`;
+      try { localStorage.setItem(gkey, JSON.stringify(data.planted)); } catch(e) {}
+    }
+
+    // Switch to the new garden
+    tdGardenId = newId;
+    _tdLoadedGardenKey = null;
+    tdSaveSel(); tdRepopulateBar(); tdApplyGarden();
+    syncCloseModal();
+  } catch(e) {
+    alert('Invalid garden code. Please check and try again.');
+  }
+}
+
 let _tdActiveTab = 'todo';
 function tdSwitchTab(tab) {
   _tdActiveTab = tab;
@@ -1043,6 +1196,10 @@ function loginTodo() {
   tdLoad();
   sessionType = 'todo';
   saveSession('todo', {});
+  // Request persistent storage so browsers don't evict our localStorage data
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-body').style.display = 'flex';
 
@@ -1706,6 +1863,10 @@ function syncShowPanel() {
       <div class="sync-provider-card" onclick="azureShowConnect()">
         <span class="sync-provider-icon">\uD83D\uDD37</span>
         <span class="sync-provider-name">Azure DevOps</span>
+      </div>
+      <div class="sync-provider-card" onclick="showGardenCodePanel()">
+        <span class="sync-provider-icon">\uD83C\uDF31</span>
+        <span class="sync-provider-name">Share Garden</span>
       </div>
     </div>
     <div class="sync-btns">
@@ -4084,6 +4245,23 @@ function spawnConfettiScreen(sx, sy) {
 // Esc or click selected task = deselect
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && selectedSeed) { cancelPlanting(); }
+  // Ctrl/Cmd+S: save garden code (file in Electron, clipboard on web)
+  if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    const garden = tdGetGarden();
+    if (!garden) return;
+    gardenToCode(garden).then(async code => {
+      const el = document.getElementById('garden-title-text');
+      const orig = el?.textContent;
+      if (window.electronAPI) {
+        const result = await window.electronAPI.saveGardenFile(code, garden.name);
+        if (el) { el.textContent = result.ok ? 'Saved!' : 'Save failed'; setTimeout(() => el.textContent = orig, 1200); }
+      } else {
+        await navigator.clipboard.writeText(code);
+        if (el) { el.textContent = 'Saved to clipboard!'; setTimeout(() => el.textContent = orig, 1200); }
+      }
+    }).catch(() => {});
+  }
 });
 
 function updateAndDrawConfetti() {
